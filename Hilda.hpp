@@ -34,7 +34,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-namespace svh {
+namespace hld {
 	constexpr auto epsilon = 0.0009765625f;
 
 	enum class Type {

@@ -1,18 +1,18 @@
-#include "Svanhild.hpp"
+#include "Hilda.hpp"
 
 GLFWwindow* window;
 tinygltf::TinyGLTF objectLoader;
-svh::Controls controls;
-svh::Details details;
-svh::State state;
-svh::Camera camera;
+hld::Controls controls;
+hld::Details details;
+hld::State state;
+hld::Camera camera;
 glm::mat4 projection;
 std::vector<GLushort> indices;
-std::vector<svh::Vertex> vertices;
+std::vector<hld::Vertex> vertices;
 std::vector<std::string> imageNames;
-std::vector<svh::Image> textures;
-std::vector<svh::Mesh> meshes;
-std::vector<svh::Portal> portals;
+std::vector<hld::Image> textures;
+std::vector<hld::Mesh> meshes;
+std::vector<hld::Portal> portals;
 std::vector<glm::mat4> transforms;
 GLuint VAO;
 GLuint VBO;
@@ -115,7 +115,7 @@ glm::mat4 getNodeTransformation(const tinygltf::Node& node) {
 	return getNodeTranslation(node) * getNodeRotation(node) * getNodeScale(node);
 }
 
-void createCameraFromMatrix(svh::Camera& camera, const glm::mat4& transformation, uint32_t room) {
+void createCameraFromMatrix(hld::Camera& camera, const glm::mat4& transformation, uint32_t room) {
 	camera.room = room;
 	camera.position = transformation * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
 	//camera.direction = transformation * glm::vec4{ 0.0f, -1.0f, 0.0f, 0.0f };
@@ -125,7 +125,7 @@ void createCameraFromMatrix(svh::Camera& camera, const glm::mat4& transformation
 }
 
 void loadTexture(std::string name) {
-	svh::Image image{};
+	hld::Image image{};
 
 	auto pixels = stbi_load(("assets/" + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
 	image.channel = 4;
@@ -133,13 +133,13 @@ void loadTexture(std::string name) {
 	textures.push_back(image);
 }
 
-void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, svh::Type type, uint32_t textureIndex,
+void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, hld::Type type, uint32_t textureIndex,
 	const glm::mat4& translation, const glm::mat4& rotation, const glm::mat4& scale, uint8_t room) {
 	auto& primitive = meshData.primitives.front();
 	auto& indexReference = modelData.bufferViews.at(primitive.indices);
 	auto& indexData = modelData.buffers.at(indexReference.buffer);
 
-	svh::Mesh mesh{};
+	hld::Mesh mesh{};
 
 	mesh.sourceRoom = room;
 	mesh.sourceTransform = translation * rotation * scale;
@@ -181,7 +181,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		indices.push_back(indexData.data.at(bufferOffset + i) + mesh.vertexOffset);
 
 	for (auto index = 0u; index < mesh.vertexLength; index++) {
-		svh::Vertex vertex{};
+		hld::Vertex vertex{};
 		vertex.position = mesh.sourceTransform * glm::vec4{ positions.at(index), 1.0f };
 		vertex.normal = glm::normalize(glm::vec3{ mesh.sourceTransform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
 		vertex.texture = texcoords.at(index);
@@ -206,13 +206,13 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	mesh.minBorders = min;
 	mesh.maxBorders = max;
 
-	if (type == svh::Type::Mesh) {
+	if (type == hld::Type::Mesh) {
 		details.meshCount++;
 		meshes.push_back(mesh);
 	}
 
-	else if (type == svh::Type::Portal) {
-		svh::Portal portal{};
+	else if (type == hld::Type::Portal) {
+		hld::Portal portal{};
 
 		portal.mesh = mesh;
 		portal.direction = glm::normalize(glm::vec3(mesh.sourceTransform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
@@ -222,7 +222,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	}
 }
 
-void loadModel(const std::string name, svh::Type type, uint8_t sourceRoom = 0, uint8_t targetRoom = 0) {
+void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, uint8_t targetRoom = 0) {
 	std::string error, warning;
 	tinygltf::Model model;
 
@@ -237,7 +237,7 @@ void loadModel(const std::string name, svh::Type type, uint8_t sourceRoom = 0, u
 		return;
 #endif
 
-	if (type == svh::Type::Camera)
+	if (type == hld::Type::Camera)
 		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), sourceRoom);
 
 	else {
@@ -253,7 +253,7 @@ void loadModel(const std::string name, svh::Type type, uint8_t sourceRoom = 0, u
 			loadMesh(model, mesh, type, getTextureIndex(model, mesh), getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), sourceRoom);
 		}
 
-		if (type == svh::Type::Portal) {
+		if (type == hld::Type::Portal) {
 			auto& bluePortal = portals.at(portals.size() - 2);
 			auto& orangePortal = portals.at(portals.size() - 1);
 			auto portalRotation = glm::rotate(glm::radians(180.0f), glm::vec3{ 0.0f, 0.0f, 1.0f });
@@ -271,20 +271,20 @@ void loadModel(const std::string name, svh::Type type, uint8_t sourceRoom = 0, u
 }
 
 void createScene() {
-	loadModel("camera", svh::Type::Camera, 1);
+	loadModel("camera", hld::Type::Camera, 1);
 
-	loadModel("portal12", svh::Type::Portal, 1, 2);
-	loadModel("portal13", svh::Type::Portal, 1, 3);
-	loadModel("portal14", svh::Type::Portal, 1, 4);
-	loadModel("portal15", svh::Type::Portal, 1, 5);
-	loadModel("portal26", svh::Type::Portal, 2, 6);
+	loadModel("portal12", hld::Type::Portal, 1, 2);
+	loadModel("portal13", hld::Type::Portal, 1, 3);
+	loadModel("portal14", hld::Type::Portal, 1, 4);
+	loadModel("portal15", hld::Type::Portal, 1, 5);
+	loadModel("portal26", hld::Type::Portal, 2, 6);
 
-	loadModel("room1", svh::Type::Mesh, 1);
-	loadModel("room2", svh::Type::Mesh, 2);
-	loadModel("room3", svh::Type::Mesh, 3);
-	loadModel("room4", svh::Type::Mesh, 4);
-	loadModel("room5", svh::Type::Mesh, 5);
-	loadModel("room6", svh::Type::Mesh, 6);
+	loadModel("room1", hld::Type::Mesh, 1);
+	loadModel("room2", hld::Type::Mesh, 2);
+	loadModel("room3", hld::Type::Mesh, 3);
+	loadModel("room4", hld::Type::Mesh, 4);
+	loadModel("room5", hld::Type::Mesh, 5);
+	loadModel("room6", hld::Type::Mesh, 6);
 }
 
 GLuint createShader(std::string path, GLenum type)
@@ -390,12 +390,12 @@ void setup() {
 
 	glGenBuffers(1, &VBO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(svh::Vertex) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(svh::Vertex), (GLvoid*)0);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(hld::Vertex) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(svh::Vertex), (GLvoid*)sizeof(glm::vec3));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)sizeof(glm::vec3));
 	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(svh::Vertex), (GLvoid*)(2 * sizeof(glm::vec3)));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)(2 * sizeof(glm::vec3)));
 	glEnableVertexAttribArray(2);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -448,7 +448,7 @@ void gameTick() {
 	auto coefficient = 0.0f, distance = glm::length(replacement);
 
 	for (auto& portal : portals) {
-		if (svh::epsilon < distance && glm::intersectRayPlane(camera.previous, direction, portal.mesh.origin, portal.direction, coefficient)) {
+		if (hld::epsilon < distance && glm::intersectRayPlane(camera.previous, direction, portal.mesh.origin, portal.direction, coefficient)) {
 			auto point = camera.previous + coefficient * direction;
 
 			if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&

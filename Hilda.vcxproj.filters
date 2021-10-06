@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Svanhild.cpp">
+    <ClCompile Include="Hilda.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="glad.c">
@@ -477,7 +477,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Svanhild.hpp">
+    <ClInclude Include="Hilda.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="headers\glad\glad.h">

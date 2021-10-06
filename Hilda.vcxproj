@@ -14,8 +14,9 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{239d65f6-8fb1-47eb-9dca-5dd47bc63156}</ProjectGuid>
-    <RootNamespace>SvanhildLegacy</RootNamespace>
+    <RootNamespace>Hilda</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Hilda</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -92,7 +93,7 @@
   <ItemGroup>
     <ClCompile Include="glad.c" />
     <ClCompile Include="headers\glm\detail\glm.cpp" />
-    <ClCompile Include="Svanhild.cpp" />
+    <ClCompile Include="Hilda.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitattributes" />
@@ -540,7 +541,7 @@
     <ClInclude Include="headers\tinygltf\stb_image.h" />
     <ClInclude Include="headers\tinygltf\stb_image_write.h" />
     <ClInclude Include="headers\tinygltf\tiny_gltf.h" />
-    <ClInclude Include="Svanhild.hpp" />
+    <ClInclude Include="Hilda.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="libraries\glfw3.lib" />
