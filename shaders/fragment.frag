@@ -1,6 +1,6 @@
 #version 460 core
 
-layout(binding = 1) uniform sampler2D textureSampler;
+layout(binding = 0) uniform sampler2D textureSampler;
 
 layout(location = 0) in vec3 inputPosition;
 layout(location = 1) in vec3 inputNormal;
@@ -18,6 +18,7 @@ void main()
 	vec3 pointLight = intensity * lightColor;
 	vec3 ambientLight = vec3(0.2f, 0.2f, 0.2f);
 	
-	outputColor = vec4(pointLight + ambientLight, 1.0f) * vec4(inputNormal, 1.0f);
-	//outputColor = vec4(pointLight + ambientLight, 1.0f) * texture(textureSampler, inputTexture);
+	//outputColor = vec4(0.0f, 0.0f, 1.0f, 1.0f);
+	//outputColor = vec4(pointLight + ambientLight, 1.0f) * vec4((inputNormal + 1) / 2, 1.0f);
+	outputColor = vec4(pointLight + ambientLight, 1.0f) * texture(textureSampler, inputTexture);
 }

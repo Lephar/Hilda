@@ -100,7 +100,7 @@ namespace hld {
 		int32_t width;
 		int32_t height;
 		int32_t channel;
-		stbi_uc* pixels;
+		uint32_t texture;
 	};
 
 	struct Mesh {

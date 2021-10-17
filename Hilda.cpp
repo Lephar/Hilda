@@ -23,8 +23,8 @@ GLuint shaderProgram;
 void mouseCallback(GLFWwindow* handle, double x, double y) {
 	static_cast<void>(handle);
 
-	controls.deltaX += x - controls.mouseX;
-	controls.deltaY += y - controls.mouseY;
+	controls.deltaX += controls.mouseX - x;
+	controls.deltaY += controls.mouseY - y;
 	controls.mouseX = x;
 	controls.mouseY = y;
 }
@@ -130,7 +130,19 @@ void loadTexture(std::string name) {
 	auto pixels = stbi_load(("assets/" + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
 	image.channel = 4;
 
+	glGenTextures(1, &image.texture);
+	glBindTexture(GL_TEXTURE_2D, image.texture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
 	textures.push_back(image);
+	stbi_image_free(pixels);
 }
 
 void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, hld::Type type, uint32_t textureIndex,
@@ -141,8 +153,14 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 
 	hld::Mesh mesh{};
 
+	mesh.indexOffset = indices.size();
+	mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
+	
 	mesh.sourceRoom = room;
 	mesh.sourceTransform = translation * rotation * scale;
+
+	indices.resize(mesh.indexOffset + mesh.indexLength);
+	std::memcpy(indices.data() + mesh.indexOffset, indexData.data.data() + indexReference.byteOffset, indexReference.byteLength);
 
 	std::vector<glm::vec3> positions;
 	std::vector<glm::vec3> normals;
@@ -170,15 +188,6 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	mesh.vertexOffset = vertices.size();
 	mesh.vertexLength = texcoords.size();
 	mesh.textureIndex = textureIndex;
-
-	mesh.indexOffset = indices.size();
-	mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
-	auto bufferOffset = indexReference.byteOffset / sizeof(GLushort);
-
-	indices.resize(mesh.indexOffset + mesh.indexLength);
-	
-	for (int i = 0; i < mesh.indexLength; i++)
-		indices.push_back(indexData.data.at(bufferOffset + i) + mesh.vertexOffset);
 
 	for (auto index = 0u; index < mesh.vertexLength; index++) {
 		hld::Vertex vertex{};
@@ -431,17 +440,18 @@ void gameTick() {
 	if (vectorCount > 0)
 		moveDelta /= std::sqrt(vectorCount);
 
-	auto left = glm::normalize(glm::cross(camera.up, camera.direction));
+	auto right = glm::normalize(glm::cross(camera.direction, camera.up));
 
-	camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, left) *
+	camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
 														glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
 														glm::vec4{camera.direction, 0.0f} });
 
-	left = glm::normalize(glm::cross(camera.up, camera.direction));
-
+	right = glm::normalize(glm::cross(camera.up, camera.direction));
+	
 	camera.previous = camera.position;
 	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
-		static_cast<float_t>(moveDelta * (controls.keyD - controls.keyA)) * left;
+		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
+	
 
 	auto replacement = camera.position - camera.previous;
 	auto direction = glm::normalize(replacement);
@@ -471,10 +481,18 @@ void gameTick() {
 	controls.deltaY = 0.0f;
 
 	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
-
+	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &transform, GL_DYNAMIC_DRAW);
-	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_SHORT, indices.data());
+	//glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &transform);
+
+	for (auto mesh : meshes) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
+		glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
+	}
+	//for (auto portal : portals)
+	//	glDrawElementsBaseVertex(GL_TRIANGLES, portal.mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(portal.mesh.indexOffset * sizeof(GLushort)), portal.mesh.vertexOffset);
 
 	state.frameCount++;
 }
@@ -486,8 +504,8 @@ void draw() {
 		if (glfwWindowShouldClose(window))
 			break;
 
-		glfwSwapBuffers(window);
 		gameTick();
+		glfwSwapBuffers(window);
 
 		if (state.checkPoint > 1.0) {
 			state.totalFrameCount += state.frameCount;
