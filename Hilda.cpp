@@ -375,13 +375,18 @@ void setup() {
 
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_STENCIL_TEST);
 
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
+	glStencilMask(0xFF);
 
+	glActiveTexture(GL_TEXTURE0);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearDepth(1.0f);
+	glClearStencil(0);
 	glViewport(0, 0, details.width, details.height);
 
 	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
@@ -426,6 +431,11 @@ void setup() {
 	state.currentTime = std::chrono::high_resolution_clock::now();
 	projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
 		0.001f, 100.0f);
+}
+
+void drawMesh(hld::Mesh& mesh) {
+	glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
+	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
 }
 
 void gameTick() {
@@ -482,17 +492,46 @@ void gameTick() {
 
 	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
 	
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &transform, GL_DYNAMIC_DRAW);
 	//glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &transform);
 
-	for (auto mesh : meshes) {
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
-		glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	glStencilFunc(GL_ALWAYS, 0, 0xFF);
+
+	for (auto& mesh : meshes)
+		drawMesh(mesh);
+
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+	
+	for (int i = 0; i < details.portalCount; i++) {
+		auto& portal = portals.at(i);
+
+		glStencilFunc(GL_ALWAYS, i + 1, 0xFF);
+
+		drawMesh(portal.mesh);
 	}
-	//for (auto portal : portals)
-	//	glDrawElementsBaseVertex(GL_TRIANGLES, portal.mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(portal.mesh.indexOffset * sizeof(GLushort)), portal.mesh.vertexOffset);
+
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	
+	for (int i = 0; i < details.portalCount; i++) {
+		auto& portal = portals.at(i);
+
+		auto portalCamera = camera;
+
+		portalCamera.room = portal.targetRoom;
+		portalCamera.position = portal.cameraTransform * glm::vec4{ portalCamera.position, 1.0f };
+		portalCamera.direction = portal.cameraTransform * glm::vec4{ portalCamera.direction, 0.0f };
+
+		auto portalTransform = projection * glm::lookAt(portalCamera.position, portalCamera.position + portalCamera.direction, portalCamera.up);
+
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &portalTransform, GL_DYNAMIC_DRAW);
+		glStencilFunc(GL_EQUAL, i + 1, 0xFF);
+		
+		for (auto& mesh : meshes)
+			drawMesh(mesh);
+	}
 
 	state.frameCount++;
 }
