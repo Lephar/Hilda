@@ -56,16 +56,12 @@ namespace hld {
 	};
 
 	struct Details {
-		uint32_t imageCount;
-		uint32_t portalCount;
 		uint32_t width;
 		uint32_t height;
+		uint32_t imageCount;
+		uint32_t portalCount;
 		uint32_t meshCount;
 		uint32_t maxCameraCount;
-		uint32_t uniformAlignment;
-		uint32_t uniformQueueStride;
-		uint32_t uniformFrameStride;
-		uint32_t uniformSize;
 	};
 
 	struct State {
@@ -116,8 +112,8 @@ namespace hld {
 		glm::vec3 minBorders;
 		glm::vec3 maxBorders;
 
-		uint8_t sourceRoom;
-		glm::mat4 sourceTransform;
+		uint8_t room;
+		glm::mat4 transform;
 	};
 
 	struct Portal {
@@ -126,7 +122,14 @@ namespace hld {
 		uint8_t targetRoom;
 
 		glm::vec3 direction;
-		glm::mat4 targetTransform;
 		glm::mat4 cameraTransform;
+	};
+
+	struct Node {
+		int32_t parentIndex;
+		int32_t portalIndex;
+
+		Camera camera;
+		glm::mat4 transform;
 	};
 }

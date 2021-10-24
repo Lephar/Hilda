@@ -13,7 +13,7 @@ std::vector<std::string> imageNames;
 std::vector<hld::Image> textures;
 std::vector<hld::Mesh> meshes;
 std::vector<hld::Portal> portals;
-std::vector<glm::mat4> transforms;
+std::vector<hld::Node> nodes;
 GLuint VAO;
 GLuint VBO;
 GLuint EBO;
@@ -62,16 +62,6 @@ void resizeEvent(GLFWwindow* handle, int width, int height) {
 	static_cast<void>(height);
 
 	glfwSetWindowSize(handle, details.width, details.width);
-}
-
-void initializeControls() {
-	controls.keyW = false;
-	controls.keyA = false;
-	controls.keyS = false;
-	controls.keyD = false;
-
-	controls.deltaX = 0.0f;
-	controls.deltaY = 0.0f;
 }
 
 uint32_t getTextureIndex(const tinygltf::Model& model, const tinygltf::Mesh& mesh) {
@@ -156,8 +146,8 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	mesh.indexOffset = indices.size();
 	mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
 	
-	mesh.sourceRoom = room;
-	mesh.sourceTransform = translation * rotation * scale;
+	mesh.room = room;
+	mesh.transform = translation * rotation * scale;
 
 	indices.resize(mesh.indexOffset + mesh.indexLength);
 	std::memcpy(indices.data() + mesh.indexOffset, indexData.data.data() + indexReference.byteOffset, indexReference.byteLength);
@@ -191,8 +181,8 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 
 	for (auto index = 0u; index < mesh.vertexLength; index++) {
 		hld::Vertex vertex{};
-		vertex.position = mesh.sourceTransform * glm::vec4{ positions.at(index), 1.0f };
-		vertex.normal = glm::normalize(glm::vec3{ mesh.sourceTransform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
+		vertex.position = mesh.transform * glm::vec4{ positions.at(index), 1.0f };
+		vertex.normal = glm::normalize(glm::vec3{ mesh.transform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
 		vertex.texture = texcoords.at(index);
 		vertices.push_back(vertex);
 	}
@@ -211,7 +201,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		max.z = std::max(max.z, vertex.position.z);
 	}
 
-	mesh.origin = glm::vec3{ mesh.sourceTransform * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f } };
+	mesh.origin = glm::vec3{ mesh.transform * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f } };
 	mesh.minBorders = min;
 	mesh.maxBorders = max;
 
@@ -224,7 +214,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		hld::Portal portal{};
 
 		portal.mesh = mesh;
-		portal.direction = glm::normalize(glm::vec3(mesh.sourceTransform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
+		portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
 
 		details.portalCount++;
 		portals.push_back(portal);
@@ -267,14 +257,11 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 			auto& orangePortal = portals.at(portals.size() - 1);
 			auto portalRotation = glm::rotate(glm::radians(180.0f), glm::vec3{ 0.0f, 0.0f, 1.0f });
 
-			bluePortal.targetRoom = orangePortal.mesh.sourceRoom = targetRoom;
-			orangePortal.targetRoom = bluePortal.mesh.sourceRoom = sourceRoom;
+			bluePortal.targetRoom = orangePortal.mesh.room = targetRoom;
+			orangePortal.targetRoom = bluePortal.mesh.room = sourceRoom;
 
-			bluePortal.targetTransform = orangePortal.mesh.sourceTransform;
-			orangePortal.targetTransform = bluePortal.mesh.sourceTransform;
-
-			bluePortal.cameraTransform = bluePortal.targetTransform * portalRotation * glm::inverse(bluePortal.mesh.sourceTransform);
-			orangePortal.cameraTransform = orangePortal.targetTransform * portalRotation * glm::inverse(orangePortal.mesh.sourceTransform);
+			bluePortal.cameraTransform = orangePortal.mesh.transform * portalRotation * glm::inverse(bluePortal.mesh.transform);
+			orangePortal.cameraTransform = bluePortal.mesh.transform * portalRotation * glm::inverse(orangePortal.mesh.transform);
 		}
 	}
 }
@@ -348,31 +335,50 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 	return program;
 }
 
-void setup() {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+void initializeContext() {
+	glfwInit();
 
-	details.width = 1280;
-	details.height = 720;
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-    window = glfwCreateWindow(details.width, details.height, "", nullptr, nullptr);
-
-    initializeControls();
+	window = glfwCreateWindow(details.width, details.height, "", nullptr, nullptr);
 
 	glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, keyboardCallback);
-    glfwSetCursorPosCallback(window, mouseCallback);
-    glfwSetFramebufferSizeCallback(window, resizeEvent);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
+	glfwSetKeyCallback(window, keyboardCallback);
+	glfwSetCursorPosCallback(window, mouseCallback);
+	glfwSetFramebufferSizeCallback(window, resizeEvent);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
 
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+}
 
-	createScene();
+void initializeStates() {
+	details.width = 1280;
+	details.height = 720;
+	details.maxCameraCount = 255;
 
+	controls.keyW = false;
+	controls.keyA = false;
+	controls.keyS = false;
+	controls.keyD = false;
+	controls.deltaX = 0.0f;
+	controls.deltaY = 0.0f;
+
+	state.frameCount = 0;
+	state.totalFrameCount = 0;
+	state.currentImage = 0;
+	state.checkPoint = 0.0f;
+	state.recordingCount = 0;
+	state.threadsActive = true;
+	state.currentTime = std::chrono::high_resolution_clock::now();
+	projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
+		0.001f, 100.0f);
+}
+
+void setupGraphics() {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_STENCIL_TEST);
@@ -421,24 +427,16 @@ void setup() {
 	glBindBuffer(GL_UNIFORM_BUFFER, UBO);
 	glUniformBlockBinding(shaderProgram, 0, 0);
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, UBO);
-
-	state.frameCount = 0;
-	state.totalFrameCount = 0;
-	state.currentImage = 0;
-	state.checkPoint = 0.0f;
-	state.recordingCount = 0;
-	state.threadsActive = true;
-	state.currentTime = std::chrono::high_resolution_clock::now();
-	projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
-		0.001f, 100.0f);
 }
 
-void drawMesh(hld::Mesh& mesh) {
-	glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
-	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
+void setup() {
+	initializeStates();
+	initializeContext();
+	createScene();
+	setupGraphics();
 }
 
-void gameTick() {
+void updateControls() {
 	state.previousTime = state.currentTime;
 	state.currentTime = std::chrono::high_resolution_clock::now();
 	state.timeDelta = std::chrono::duration<double_t, std::chrono::seconds::period>(state.currentTime - state.previousTime).count();
@@ -457,11 +455,10 @@ void gameTick() {
 														glm::vec4{camera.direction, 0.0f} });
 
 	right = glm::normalize(glm::cross(camera.up, camera.direction));
-	
+
 	camera.previous = camera.position;
 	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
 		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
-	
 
 	auto replacement = camera.position - camera.previous;
 	auto direction = glm::normalize(replacement);
@@ -489,11 +486,68 @@ void gameTick() {
 
 	controls.deltaX = 0.0f;
 	controls.deltaY = 0.0f;
+}
+
+bool visible(hld::Portal& portal, hld::Node& node) {
+	if (portal.mesh.room == node.camera.room)
+		return true;
+	else
+		return false;
+}
+
+void generateNodes() {
+	nodes.clear();
+
+	std::queue<hld::Node> queue;
 
 	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
-	
+
+	hld::Node mainNode{ -1, -1, camera, transform };
+
+	queue.push(mainNode);
+	nodes.push_back(mainNode);
+
+	while (nodes.size() != details.maxCameraCount && !queue.empty()) {
+		int32_t parentIndex = nodes.size() - queue.size();
+
+		auto parentNode = queue.front();
+		queue.pop();
+
+		for (int32_t i = 0; i < portals.size(); i++) {
+			auto& portal = portals.at(i);
+
+			if (visible(portal, parentNode)) {
+				hld::Camera portalCamera {
+					portal.targetRoom,
+					portal.cameraTransform * glm::vec4{ parentNode.camera.position, 1.0f },
+					portal.cameraTransform * glm::vec4{ parentNode.camera.direction, 0.0f },
+					parentNode.camera.up,
+					parentNode.camera.previous
+				};
+
+				auto portalTransform = projection * glm::lookAt(portalCamera.position,
+					portalCamera.position + portalCamera.direction, portalCamera.up);
+
+				hld::Node portalNode{ parentIndex, i, portalCamera, portalTransform };
+
+				queue.push(portalNode);
+				nodes.push_back(portalNode);
+
+				if (nodes.size() == details.maxCameraCount)
+					break;
+			}
+		}
+	}
+}
+
+void drawMesh(hld::Mesh& mesh) {
+	glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
+	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
+}
+
+void drawScene() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &transform, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &nodes.front().transform, GL_DYNAMIC_DRAW);
 	//glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &transform);
 
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
@@ -504,10 +558,20 @@ void gameTick() {
 
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 	
-	for (int i = 0; i < details.portalCount; i++) {
-		auto& portal = portals.at(i);
+	for (int i = 1; i < nodes.size(); i++) {
+		auto& node = nodes.at(i);
+		auto& parentNode = nodes.at(node.parentIndex);
+		auto& portal = portals.at(node.portalIndex);
 
-		glStencilFunc(GL_ALWAYS, i + 1, 0xFF);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &parentNode.transform, GL_DYNAMIC_DRAW);
+
+		if (GLAD_GL_AMD_stencil_operation_extended) { // The solution we need
+			glStencilOpValueAMD(GL_FRONT_AND_BACK, i);
+			glStencilFunc(GL_EQUAL, node.parentIndex, 0xFF);
+		}
+		else { //The solution we deserve
+
+		}
 
 		drawMesh(portal.mesh);
 	}
@@ -515,25 +579,27 @@ void gameTick() {
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 	
-	for (int i = 0; i < details.portalCount; i++) {
-		auto& portal = portals.at(i);
+	for (int i = 1; i < nodes.size(); i++) {
+		auto& node = nodes.at(i);
 
-		auto portalCamera = camera;
-
-		portalCamera.room = portal.targetRoom;
-		portalCamera.position = portal.cameraTransform * glm::vec4{ portalCamera.position, 1.0f };
-		portalCamera.direction = portal.cameraTransform * glm::vec4{ portalCamera.direction, 0.0f };
-
-		auto portalTransform = projection * glm::lookAt(portalCamera.position, portalCamera.position + portalCamera.direction, portalCamera.up);
-
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &portalTransform, GL_DYNAMIC_DRAW);
-		glStencilFunc(GL_EQUAL, i + 1, 0xFF);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &node.transform, GL_DYNAMIC_DRAW);
+		glStencilFunc(GL_EQUAL, i, 0xFF);
 		
 		for (auto& mesh : meshes)
 			drawMesh(mesh);
 	}
 
 	state.frameCount++;
+}
+
+void updateFeedbacks() {
+	if (state.checkPoint > 1.0) {
+		state.totalFrameCount += state.frameCount;
+		auto title = std::to_string(state.frameCount) + " - " + std::to_string(state.totalFrameCount);
+		state.frameCount = 0;
+		state.checkPoint = 0.0;
+		glfwSetWindowTitle(window, title.c_str());
+	}
 }
 
 void draw() {
@@ -543,16 +609,11 @@ void draw() {
 		if (glfwWindowShouldClose(window))
 			break;
 
-		gameTick();
+		updateControls();
+		generateNodes();
+		drawScene();
+		updateFeedbacks();
 		glfwSwapBuffers(window);
-
-		if (state.checkPoint > 1.0) {
-			state.totalFrameCount += state.frameCount;
-			auto title = std::to_string(state.frameCount) + " - " + std::to_string(state.totalFrameCount);
-			state.frameCount = 0;
-			state.checkPoint = 0.0;
-			glfwSetWindowTitle(window, title.c_str());
-		}
 
 		//std::this_thread::sleep_until(state.currentTime + std::chrono::milliseconds(1));
 	}
