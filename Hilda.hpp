@@ -126,6 +126,7 @@ namespace hld {
 	};
 
 	struct Node {
+		uint32_t layer;
 		int32_t parentIndex;
 		int32_t portalIndex;
 

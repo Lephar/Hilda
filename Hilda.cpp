@@ -352,13 +352,15 @@ void initializeContext() {
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
 
+	glfwSwapInterval(0);
+
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 }
 
 void initializeStates() {
 	details.width = 1280;
 	details.height = 720;
-	details.maxCameraCount = 255;
+	details.maxCameraCount = 15;
 
 	controls.keyW = false;
 	controls.keyA = false;
@@ -387,13 +389,11 @@ void setupGraphics() {
 	glCullFace(GL_BACK);
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
-	glStencilMask(0xFF);
 
 	glActiveTexture(GL_TEXTURE0);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClearDepth(1.0f);
 	glClearStencil(0);
-	glViewport(0, 0, details.width, details.height);
 
 	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
 	GLuint fragmentShader = createShader("shaders/fragment.frag", GL_FRAGMENT_SHADER);
@@ -502,7 +502,7 @@ void generateNodes() {
 
 	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
 
-	hld::Node mainNode{ -1, -1, camera, transform };
+	hld::Node mainNode{ 0, -1, -1, camera, transform };
 
 	queue.push(mainNode);
 	nodes.push_back(mainNode);
@@ -528,7 +528,7 @@ void generateNodes() {
 				auto portalTransform = projection * glm::lookAt(portalCamera.position,
 					portalCamera.position + portalCamera.direction, portalCamera.up);
 
-				hld::Node portalNode{ parentIndex, i, portalCamera, portalTransform };
+				hld::Node portalNode{ parentNode.layer + 1, parentIndex, i, portalCamera, portalTransform };
 
 				queue.push(portalNode);
 				nodes.push_back(portalNode);
@@ -545,49 +545,71 @@ void drawMesh(hld::Mesh& mesh) {
 	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
 }
 
-void drawScene() {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+void drawViewport() {
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &nodes.front().transform, GL_DYNAMIC_DRAW);
-	//glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &transform);
 
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 	glStencilFunc(GL_ALWAYS, 0, 0xFF);
+	glStencilMask(0x00);
 
 	for (auto& mesh : meshes)
 		drawMesh(mesh);
 
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-	
+
 	for (int i = 1; i < nodes.size(); i++) {
 		auto& node = nodes.at(i);
 		auto& parentNode = nodes.at(node.parentIndex);
 		auto& portal = portals.at(node.portalIndex);
+		uint32_t mod = node.layer % 2;
 
 		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &parentNode.transform, GL_DYNAMIC_DRAW);
 
-		if (GLAD_GL_AMD_stencil_operation_extended) { // The solution we need
-			glStencilOpValueAMD(GL_FRONT_AND_BACK, i);
-			glStencilFunc(GL_EQUAL, node.parentIndex, 0xFF);
-		}
-		else { //The solution we deserve
+		if (!mod) {
+			uint8_t value = (node.parentIndex << 4) + i;
 
+			glStencilMask(0x0F);
+			glStencilFunc(GL_EQUAL, value, 0xF0);
+		}
+		else {
+			uint32_t value = (i << 4) + node.parentIndex;
+
+			glStencilMask(0xF0);
+			glStencilFunc(GL_EQUAL, value, 0x0F);
 		}
 
 		drawMesh(portal.mesh);
 	}
 
 	glClear(GL_DEPTH_BUFFER_BIT);
+
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	
+	glStencilMask(0x00);
+
 	for (int i = 1; i < nodes.size(); i++) {
 		auto& node = nodes.at(i);
+		uint8_t mod = node.layer % 2;
 
 		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &node.transform, GL_DYNAMIC_DRAW);
-		glStencilFunc(GL_EQUAL, i, 0xFF);
-		
+
+		if (!mod)
+			glStencilFunc(GL_EQUAL, i, 0x0F);
+		else
+			glStencilFunc(GL_EQUAL, i << 4, 0xF0);
+
 		for (auto& mesh : meshes)
 			drawMesh(mesh);
 	}
+}
+
+void drawScene() {
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	glViewport(0, 0, details.width / 2, details.height);
+	drawViewport();
+
+	glViewport(details.width / 2, 0, details.width / 2, details.height);
+	drawViewport();
 
 	state.frameCount++;
 }
@@ -596,6 +618,7 @@ void updateFeedbacks() {
 	if (state.checkPoint > 1.0) {
 		state.totalFrameCount += state.frameCount;
 		auto title = std::to_string(state.frameCount) + " - " + std::to_string(state.totalFrameCount);
+
 		state.frameCount = 0;
 		state.checkPoint = 0.0;
 		glfwSetWindowTitle(window, title.c_str());
