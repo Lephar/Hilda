@@ -1,12 +1,25 @@
 #include "Hilda.hpp"
 
 GLFWwindow* window;
+
 tinygltf::TinyGLTF objectLoader;
+
+ovrSession session;
+ovrGraphicsLuid luid;
+ovrHmdDesc hmdDesc;
+ovrSizei resolution;
+ovrSizei bufferSize;
+ovrTextureSwapChain swapchain;
+
 hld::Controls controls;
 hld::Details details;
 hld::State state;
 hld::Camera camera;
+
+glm::vec3 origin;
+glm::vec4 forward;
 glm::mat4 projection;
+
 std::vector<GLushort> indices;
 std::vector<hld::Vertex> vertices;
 std::vector<std::string> imageNames;
@@ -14,10 +27,13 @@ std::vector<hld::Image> textures;
 std::vector<hld::Mesh> meshes;
 std::vector<hld::Portal> portals;
 std::vector<hld::Node> nodes;
+
 GLuint VAO;
 GLuint VBO;
 GLuint EBO;
 GLuint UBO;
+GLuint framebuffer;
+GLuint depthBuffer;
 GLuint shaderProgram;
 
 void mouseCallback(GLFWwindow* handle, double x, double y) {
@@ -236,8 +252,15 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 		return;
 #endif
 
-	if (type == hld::Type::Camera)
+	if (type == hld::Type::Camera) {
 		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), sourceRoom);
+
+		origin = camera.position;
+		forward = glm::vec4{ camera.direction, 0.0f };
+
+		projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
+			0.001f, 100.0f);
+	}
 
 	else {
 		for (auto& image : model.images) {
@@ -335,7 +358,42 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 	return program;
 }
 
+void initializeStates() {
+	details.maxCameraCount = 15;
+
+	controls.keyW = false;
+	controls.keyA = false;
+	controls.keyS = false;
+	controls.keyD = false;
+	controls.deltaX = 0.0f;
+	controls.deltaY = 0.0f;
+
+	state.frameCount = 0;
+	state.totalFrameCount = 0;
+	state.currentImage = 0;
+	state.checkPoint = 0.0f;
+	state.recordingCount = 0;
+	state.threadsActive = true;
+	state.currentTime = std::chrono::high_resolution_clock::now();
+}
+
 void initializeContext() {
+	ovrResult result;
+
+	result = ovr_Initialize(nullptr);
+
+	if (OVR_FAILURE(result))
+		std::cout << "Failed Init" << std::endl;
+
+	result = ovr_Create(&session, &luid);
+
+	if (OVR_FAILURE(result))
+		std::cout << "Failed Create" << std::endl;
+
+	hmdDesc = ovr_GetHmdDesc(session);
+	details.width = hmdDesc.Resolution.w;
+	details.height = hmdDesc.Resolution.h;
+
 	glfwInit();
 
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -357,29 +415,6 @@ void initializeContext() {
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 }
 
-void initializeStates() {
-	details.width = 1280;
-	details.height = 720;
-	details.maxCameraCount = 15;
-
-	controls.keyW = false;
-	controls.keyA = false;
-	controls.keyS = false;
-	controls.keyD = false;
-	controls.deltaX = 0.0f;
-	controls.deltaY = 0.0f;
-
-	state.frameCount = 0;
-	state.totalFrameCount = 0;
-	state.currentImage = 0;
-	state.checkPoint = 0.0f;
-	state.recordingCount = 0;
-	state.threadsActive = true;
-	state.currentTime = std::chrono::high_resolution_clock::now();
-	projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
-		0.001f, 100.0f);
-}
-
 void setupGraphics() {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
@@ -390,10 +425,40 @@ void setupGraphics() {
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
 
+	//glGenFramebuffers(1, &framebuffer);
+	//glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	
+	//glGenRenderbuffers(1, &depthBuffer);
+	//glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, bufferSize.w, bufferSize.h);
+	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+	
+	GLenum drawBuffer = GL_COLOR_ATTACHMENT0;
+	glDrawBuffers(1, &drawBuffer);
+
 	glActiveTexture(GL_TEXTURE0);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClearDepth(1.0f);
 	glClearStencil(0);
+
+	ovrSizei recommenedTex0Size = ovr_GetFovTextureSize(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0], 1.0f);
+	ovrSizei recommenedTex1Size = ovr_GetFovTextureSize(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1], 1.0f);
+
+	bufferSize.w = recommenedTex0Size.w + recommenedTex1Size.w;
+	bufferSize.h = std::max(recommenedTex0Size.h, recommenedTex1Size.h);
+
+	ovrTextureSwapChainDesc swapchainDesc{};
+	swapchainDesc.Type = ovrTexture_2D;
+	swapchainDesc.ArraySize = 1;
+	swapchainDesc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
+	swapchainDesc.Width = bufferSize.w;
+	swapchainDesc.Height = bufferSize.h;
+	swapchainDesc.MipLevels = 1;
+	swapchainDesc.SampleCount = 1;
+	swapchainDesc.StaticImage = ovrFalse;
+
+	if (ovr_CreateTextureSwapChainGL(session, &swapchainDesc, &swapchain) != ovrSuccess)
+		std::cout << "Failed Swapchain" << std::endl;
 
 	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
 	GLuint fragmentShader = createShader("shaders/fragment.frag", GL_FRAGMENT_SHADER);
@@ -442,6 +507,7 @@ void updateControls() {
 	state.timeDelta = std::chrono::duration<double_t, std::chrono::seconds::period>(state.currentTime - state.previousTime).count();
 	state.checkPoint += state.timeDelta;
 
+	/*
 	auto moveDelta = state.timeDelta * 6.0, turnDelta = state.timeDelta * glm::radians(30.0);
 	auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
 
@@ -459,6 +525,23 @@ void updateControls() {
 	camera.previous = camera.position;
 	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
 		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
+	*/
+
+	ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
+
+	if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
+	{
+		ovrPosef pose = ts.HeadPose.ThePose;
+
+		//std::cout << pose.Position.x << " " << pose.Position.y << " " << pose.Position.z << std::endl;
+		//std::cout << pose.Orientation.w << " " << pose.Orientation.x << " " << pose.Orientation.y << " " << pose.Orientation.z << std::endl << std::endl;
+
+		camera.previous = camera.position;
+		camera.position = origin + glm::vec3{ -pose.Position.z + 0.5f, -pose.Position.x + 0.5f, pose.Position.y + 0.5f } * 10.0f;
+
+		glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y});
+		camera.direction = rotation * forward;
+	}
 
 	auto replacement = camera.position - camera.previous;
 	auto direction = glm::normalize(replacement);
@@ -554,7 +637,7 @@ void drawViewport() {
 
 	for (auto& mesh : meshes)
 		drawMesh(mesh);
-
+	
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
 	for (int i = 1; i < nodes.size(); i++) {
@@ -600,16 +683,53 @@ void drawViewport() {
 		for (auto& mesh : meshes)
 			drawMesh(mesh);
 	}
+
+	glStencilMask(0xFF);
 }
 
 void drawScene() {
+	ovrEyeRenderDesc eyeRenderDesc[2];
+	ovrPosef hmdToEyeViewPose[2];
+	ovrHmdDesc hmdDesc = ovr_GetHmdDesc(session);
+	eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
+	eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
+	hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
+	hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
+
+	ovrLayerEyeFov layer;
+	layer.Header.Type = ovrLayerType_EyeFov;
+	layer.Header.Flags = 0;
+	layer.ColorTexture[0] = swapchain;
+	layer.ColorTexture[1] = swapchain;
+	layer.Fov[0] = eyeRenderDesc[0].Fov;
+	layer.Fov[1] = eyeRenderDesc[1].Fov;
+	layer.Viewport[0] = ovrRecti{ 0, 0, bufferSize.w / 2, bufferSize.h };
+	layer.Viewport[1] = ovrRecti{ bufferSize.w / 2, 0, bufferSize.w / 2, bufferSize.h };
+
+	int imageIndex = -1;
+	ovr_GetTextureSwapChainCurrentIndex(session, swapchain, &imageIndex);
+
+	unsigned int textureID;
+	ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &textureID);
+
+	//glBindTexture(GL_TEXTURE_2D, textureID);
+	//glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0);
+
+	ovr_WaitToBeginFrame(session, state.frameCount);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	glViewport(0, 0, details.width / 2, details.height);
+	ovr_BeginFrame(session, state.frameCount);
+
+	glViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
 	drawViewport();
 
-	glViewport(details.width / 2, 0, details.width / 2, details.height);
+	glViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
 	drawViewport();
+
+	ovr_CommitTextureSwapChain(session, swapchain);
+
+	ovrLayerHeader* layers = &layer.Header;
+	ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
 
 	state.frameCount++;
 }
@@ -644,6 +764,9 @@ void draw() {
 
 void clean() {
 	glfwTerminate();
+
+	ovr_Destroy(session);
+	ovr_Shutdown();
 }
 
 int main()

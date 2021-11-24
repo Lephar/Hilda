@@ -26,6 +26,7 @@
 #include <shared_mutex>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/intersect.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
@@ -33,6 +34,9 @@
 #include <tinygltf/tiny_gltf.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
+#include <LibOVR/OVR_CAPI.h>
+#include <LibOVR/OVR_CAPI_GL.h>
 
 namespace hld {
 	constexpr auto epsilon = 0.0009765625f;
