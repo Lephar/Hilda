@@ -248,6 +248,8 @@
     <None Include="headers\glm\gtx\wrap.inl" />
     <None Include="shaders\compute.comp" />
     <None Include="shaders\fragment.frag" />
+    <None Include="shaders\screen.frag" />
+    <None Include="shaders\screen.vert" />
     <None Include="shaders\vertex.vert" />
   </ItemGroup>
   <ItemGroup>
