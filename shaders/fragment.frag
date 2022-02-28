@@ -19,6 +19,6 @@ void main()
 	vec3 ambientLight = vec3(0.2f, 0.2f, 0.2f);
 	
 	//outputColor = vec4(0.0f, 0.0f, 1.0f, 1.0f);
-	//outputColor = vec4(pointLight + ambientLight, 1.0f) * vec4((inputNormal + 1) / 2, 1.0f);
+	//outputColor = vec4(pointLight + ambientLight, 1.0f) * vec4((inputNormal + 1) / 2.0f, 1.0f);
 	outputColor = vec4(pointLight + ambientLight, 1.0f) * texture(textureSampler, inputTexture);
 }

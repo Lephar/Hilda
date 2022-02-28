@@ -1,5 +1,7 @@
 #include "Hilda.hpp"
 
+//#define VR
+
 GLFWwindow* window;
 
 tinygltf::TinyGLTF objectLoader;
@@ -28,13 +30,28 @@ std::vector<hld::Mesh> meshes;
 std::vector<hld::Portal> portals;
 std::vector<hld::Node> nodes;
 
+GLuint FBO;
 GLuint VAO;
 GLuint VBO;
 GLuint EBO;
 GLuint UBO;
-GLuint framebuffer;
-GLuint depthBuffer;
 GLuint shaderProgram;
+
+std::ostream& operator<<(std::ostream& os, glm::vec2& vector) {
+	return os << vector.x << " " << vector.y << std::endl;
+}
+
+std::ostream& operator<<(std::ostream& os, glm::vec3& vector) {
+	return os << vector.x << " " << vector.y << " " << vector.z << std::endl;
+}
+
+std::ostream& operator<<(std::ostream& os, hld::Vertex& vertex) {
+	return os << vertex.position << vertex.normal << vertex.texture << std::endl;
+}
+
+std::ostream& operator<<(std::ostream& os, hld::Node& node) {
+	return os << node.layer << " " << node.parentIndex << " " << node.portalIndex << std::endl;
+}
 
 void mouseCallback(GLFWwindow* handle, double x, double y) {
 	static_cast<void>(handle);
@@ -80,16 +97,6 @@ void resizeEvent(GLFWwindow* handle, int width, int height) {
 	glfwSetWindowSize(handle, details.width, details.width);
 }
 
-uint32_t getTextureIndex(const tinygltf::Model& model, const tinygltf::Mesh& mesh) {
-	auto& material = model.materials.at(mesh.primitives.front().material);
-
-	for (auto& value : material.values)
-		if (!value.first.compare("baseColorTexture"))
-			return std::distance(imageNames.begin(), std::find(imageNames.begin(), imageNames.end(), model.images.at(value.second.TextureIndex()).name));
-
-	return std::numeric_limits<uint32_t>::max();
-}
-
 glm::mat4 getNodeTranslation(const tinygltf::Node& node) {
 	glm::mat4 translation{ 1.0f };
 
@@ -124,8 +131,7 @@ glm::mat4 getNodeTransformation(const tinygltf::Node& node) {
 void createCameraFromMatrix(hld::Camera& camera, const glm::mat4& transformation, uint32_t room) {
 	camera.room = room;
 	camera.position = transformation * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
-	//camera.direction = transformation * glm::vec4{ 0.0f, -1.0f, 0.0f, 0.0f };
-	camera.direction = glm::vec4{ 1.0f, 0.0f, 0.0f, 0.0f };
+	camera.direction = transformation * glm::vec4{ 0.0f, -1.0f, 0.0f, 0.0f };
 	camera.up = transformation * glm::vec4{ 0.0f, 0.0f, 1.0f, 0.0f };
 	camera.previous = camera.position;
 }
@@ -151,89 +157,99 @@ void loadTexture(std::string name) {
 	stbi_image_free(pixels);
 }
 
-void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, hld::Type type, uint32_t textureIndex,
+void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, hld::Type type,
 	const glm::mat4& translation, const glm::mat4& rotation, const glm::mat4& scale, uint8_t room) {
-	auto& primitive = meshData.primitives.front();
-	auto& indexReference = modelData.bufferViews.at(primitive.indices);
-	auto& indexData = modelData.buffers.at(indexReference.buffer);
+	for(auto& primitive : meshData.primitives) {
+		auto& indexReference = modelData.bufferViews.at(primitive.indices);
+		auto& indexData = modelData.buffers.at(indexReference.buffer);
+		auto& material = modelData.materials.at(primitive.material);
+		auto textureIndex = 0u;
 
-	hld::Mesh mesh{};
+		for (auto& value : material.values) {
+			if (!value.first.compare("baseColorTexture")) {
+				textureIndex = std::distance(imageNames.begin(), std::find(imageNames.begin(), imageNames.end(),
+					modelData.images.at(value.second.TextureIndex()).name));
+			}
+		}
 
-	mesh.indexOffset = indices.size();
-	mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
+		hld::Mesh mesh{};
+
+		mesh.indexOffset = indices.size();
+		mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
 	
-	mesh.room = room;
-	mesh.transform = translation * rotation * scale;
+		mesh.room = room;
+		mesh.transform = translation * rotation * scale;
 
-	indices.resize(mesh.indexOffset + mesh.indexLength);
-	std::memcpy(indices.data() + mesh.indexOffset, indexData.data.data() + indexReference.byteOffset, indexReference.byteLength);
+		indices.resize(mesh.indexOffset + mesh.indexLength);
+		std::memcpy(indices.data() + mesh.indexOffset, indexData.data.data() + indexReference.byteOffset, indexReference.byteLength);
 
-	std::vector<glm::vec3> positions;
-	std::vector<glm::vec3> normals;
-	std::vector<glm::vec2> texcoords;
+		std::vector<glm::vec3> positions;
+		std::vector<glm::vec3> normals;
+		std::vector<glm::vec2> texcoords;
 
-	for (auto& attribute : primitive.attributes) {
-		auto& accessor = modelData.accessors.at(attribute.second);
-		auto& primitiveView = modelData.bufferViews.at(accessor.bufferView);
-		auto& primitiveBuffer = modelData.buffers.at(primitiveView.buffer);
+		for (auto& attribute : primitive.attributes) {
+			auto& accessor = modelData.accessors.at(attribute.second);
+			auto& primitiveView = modelData.bufferViews.at(accessor.bufferView);
+			auto& primitiveBuffer = modelData.buffers.at(primitiveView.buffer);
 
-		if (attribute.first.compare("POSITION") == 0) {
-			positions.resize(primitiveView.byteLength / sizeof(glm::vec3));
-			std::memcpy(positions.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+			if (attribute.first.compare("POSITION") == 0) {
+				positions.resize(primitiveView.byteLength / sizeof(glm::vec3));
+				std::memcpy(positions.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+			}
+			else if (attribute.first.compare("NORMAL") == 0) {
+				normals.resize(primitiveView.byteLength / sizeof(glm::vec3));
+				std::memcpy(normals.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+			}
+			else if (attribute.first.compare("TEXCOORD_0") == 0) {
+				texcoords.resize(primitiveView.byteLength / sizeof(glm::vec2));
+				std::memcpy(texcoords.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+			}
 		}
-		else if (attribute.first.compare("NORMAL") == 0) {
-			normals.resize(primitiveView.byteLength / sizeof(glm::vec3));
-			std::memcpy(normals.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+
+		mesh.vertexOffset = vertices.size();
+		mesh.vertexLength = texcoords.size();
+		mesh.textureIndex = textureIndex;
+
+		for (auto index = 0u; index < mesh.vertexLength; index++) {
+			hld::Vertex vertex{};
+			vertex.position = mesh.transform * glm::vec4{ positions.at(index), 1.0f };
+			vertex.normal = glm::normalize(glm::vec3{ mesh.transform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
+			vertex.texture = texcoords.at(index);
+			vertices.push_back(vertex);
 		}
-		else if (attribute.first.compare("TEXCOORD_0") == 0) {
-			texcoords.resize(primitiveView.byteLength / sizeof(glm::vec2));
-			std::memcpy(texcoords.data(), primitiveBuffer.data.data() + primitiveView.byteOffset, primitiveView.byteLength);
+
+		auto min = glm::vec3{ std::numeric_limits<float_t>::max() }, max = glm::vec3{ -std::numeric_limits<float_t>::max() };
+
+		for (auto index = 0u; index < mesh.vertexLength; index++) {
+			auto& vertex = vertices.at(mesh.vertexOffset + index);
+
+			min.x = std::min(min.x, vertex.position.x);
+			min.y = std::min(min.y, vertex.position.y);
+			min.z = std::min(min.z, vertex.position.z);
+
+			max.x = std::max(max.x, vertex.position.x);
+			max.y = std::max(max.y, vertex.position.y);
+			max.z = std::max(max.z, vertex.position.z);
 		}
-	}
 
-	mesh.vertexOffset = vertices.size();
-	mesh.vertexLength = texcoords.size();
-	mesh.textureIndex = textureIndex;
+		mesh.origin = glm::vec3{ mesh.transform * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f } };
+		mesh.minBorders = min;
+		mesh.maxBorders = max;
 
-	for (auto index = 0u; index < mesh.vertexLength; index++) {
-		hld::Vertex vertex{};
-		vertex.position = mesh.transform * glm::vec4{ positions.at(index), 1.0f };
-		vertex.normal = glm::normalize(glm::vec3{ mesh.transform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
-		vertex.texture = texcoords.at(index);
-		vertices.push_back(vertex);
-	}
+		if (type == hld::Type::Mesh) {
+			details.meshCount++;
+			meshes.push_back(mesh);
+		}
 
-	auto min = glm::vec3{ std::numeric_limits<float_t>::max() }, max = glm::vec3{ -std::numeric_limits<float_t>::max() };
+		else if (type == hld::Type::Portal) {
+			hld::Portal portal{};
 
-	for (auto index = 0u; index < mesh.vertexLength; index++) {
-		auto& vertex = vertices.at(mesh.vertexOffset + index);
+			portal.mesh = mesh;
+			portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
 
-		min.x = std::min(min.x, vertex.position.x);
-		min.y = std::min(min.y, vertex.position.y);
-		min.z = std::min(min.z, vertex.position.z);
-
-		max.x = std::max(max.x, vertex.position.x);
-		max.y = std::max(max.y, vertex.position.y);
-		max.z = std::max(max.z, vertex.position.z);
-	}
-
-	mesh.origin = glm::vec3{ mesh.transform * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f } };
-	mesh.minBorders = min;
-	mesh.maxBorders = max;
-
-	if (type == hld::Type::Mesh) {
-		details.meshCount++;
-		meshes.push_back(mesh);
-	}
-
-	else if (type == hld::Type::Portal) {
-		hld::Portal portal{};
-
-		portal.mesh = mesh;
-		portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
-
-		details.portalCount++;
-		portals.push_back(portal);
+			details.portalCount++;
+			portals.push_back(portal);
+		}
 	}
 }
 
@@ -259,7 +275,7 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 		forward = glm::vec4{ camera.direction, 0.0f };
 
 		projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
-			0.001f, 100.0f);
+			0.01f, 1000.0f);
 	}
 
 	else {
@@ -272,7 +288,7 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 
 		for (auto& node : model.nodes) {
 			auto& mesh = model.meshes.at(node.mesh);
-			loadMesh(model, mesh, type, getTextureIndex(model, mesh), getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), sourceRoom);
+			loadMesh(model, mesh, type, getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), sourceRoom);
 		}
 
 		if (type == hld::Type::Portal) {
@@ -304,6 +320,8 @@ void createScene() {
 	loadModel("room4", hld::Type::Mesh, 4);
 	loadModel("room5", hld::Type::Mesh, 5);
 	loadModel("room6", hld::Type::Mesh, 6);
+	
+	//loadModel("italy", hld::Type::Mesh, 1);
 }
 
 GLuint createShader(std::string path, GLenum type)
@@ -359,7 +377,7 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 }
 
 void initializeStates() {
-	details.maxCameraCount = 15;
+	details.maxCameraCount = 14;	// 2 ^ 4 - 1 - 1
 
 	controls.keyW = false;
 	controls.keyA = false;
@@ -368,16 +386,15 @@ void initializeStates() {
 	controls.deltaX = 0.0f;
 	controls.deltaY = 0.0f;
 
+	state.currentImage = 0;
 	state.frameCount = 0;
 	state.totalFrameCount = 0;
-	state.currentImage = 0;
 	state.checkPoint = 0.0f;
-	state.recordingCount = 0;
-	state.threadsActive = true;
 	state.currentTime = std::chrono::high_resolution_clock::now();
 }
 
 void initializeContext() {
+#ifdef VR
 	ovrResult result;
 
 	result = ovr_Initialize(nullptr);
@@ -393,6 +410,10 @@ void initializeContext() {
 	hmdDesc = ovr_GetHmdDesc(session);
 	details.width = hmdDesc.Resolution.w;
 	details.height = hmdDesc.Resolution.h;
+#else
+	details.width = 800;
+	details.height = 600;
+#endif
 
 	glfwInit();
 
@@ -400,6 +421,7 @@ void initializeContext() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	//glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
 
 	window = glfwCreateWindow(details.width, details.height, "", nullptr, nullptr);
 
@@ -410,37 +432,37 @@ void initializeContext() {
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
 
-	glfwSwapInterval(0);
-
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+
+	glfwSwapInterval(0);
 }
 
 void setupGraphics() {
 	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_STENCIL_TEST);
-
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
+
+	glEnable(GL_DEPTH_TEST);
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
-
-	//glGenFramebuffers(1, &framebuffer);
-	//glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-	
-	//glGenRenderbuffers(1, &depthBuffer);
-	//glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, bufferSize.w, bufferSize.h);
-	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
-	
-	GLenum drawBuffer = GL_COLOR_ATTACHMENT0;
-	glDrawBuffers(1, &drawBuffer);
-
-	glActiveTexture(GL_TEXTURE0);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClearDepth(1.0f);
+
+	glEnable(GL_STENCIL_TEST);
 	glClearStencil(0);
 
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
+	GLuint fragmentShader = createShader("shaders/fragment.frag", GL_FRAGMENT_SHADER);
+	shaderProgram = createProgram(vertexShader, fragmentShader);
+
+	glDetachShader(shaderProgram, vertexShader);
+	glDetachShader(shaderProgram, fragmentShader);
+	glDeleteShader(vertexShader);
+	glDeleteShader(fragmentShader);
+	glUseProgram(shaderProgram);
+
+#ifdef VR
 	ovrSizei recommenedTex0Size = ovr_GetFovTextureSize(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0], 1.0f);
 	ovrSizei recommenedTex1Size = ovr_GetFovTextureSize(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1], 1.0f);
 
@@ -459,16 +481,24 @@ void setupGraphics() {
 
 	if (ovr_CreateTextureSwapChainGL(session, &swapchainDesc, &swapchain) != ovrSuccess)
 		std::cout << "Failed Swapchain" << std::endl;
+#endif
 
-	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
-	GLuint fragmentShader = createShader("shaders/fragment.frag", GL_FRAGMENT_SHADER);
-	shaderProgram = createProgram(vertexShader, fragmentShader);
+	glGenFramebuffers(1, &FBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
 
-	glDetachShader(shaderProgram, vertexShader);
-	glDetachShader(shaderProgram, fragmentShader);
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
-	glUseProgram(shaderProgram);
+	GLuint framebufferColorTexture;
+	glGenTextures(1, &framebufferColorTexture);
+	glBindTexture(GL_TEXTURE_2D, framebufferColorTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, details.width, details.height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebufferColorTexture, 0);
+
+	GLuint renderBuffer;
+	glGenRenderbuffers(1, &renderBuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, details.width, details.height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBuffer);
 
 	glGenVertexArrays(1, &VAO);
 	glBindVertexArray(VAO);
@@ -507,26 +537,7 @@ void updateControls() {
 	state.timeDelta = std::chrono::duration<double_t, std::chrono::seconds::period>(state.currentTime - state.previousTime).count();
 	state.checkPoint += state.timeDelta;
 
-	/*
-	auto moveDelta = state.timeDelta * 6.0, turnDelta = state.timeDelta * glm::radians(30.0);
-	auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
-
-	if (vectorCount > 0)
-		moveDelta /= std::sqrt(vectorCount);
-
-	auto right = glm::normalize(glm::cross(camera.direction, camera.up));
-
-	camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
-														glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
-														glm::vec4{camera.direction, 0.0f} });
-
-	right = glm::normalize(glm::cross(camera.up, camera.direction));
-
-	camera.previous = camera.position;
-	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
-		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
-	*/
-
+#ifdef VR
 	ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
 
 	if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
@@ -542,6 +553,25 @@ void updateControls() {
 		glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y});
 		camera.direction = rotation * forward;
 	}
+#else
+	auto moveDelta = state.timeDelta * 6.0, turnDelta = glm::radians(0.1);
+	auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
+
+	if (vectorCount > 0)
+		moveDelta /= std::sqrt(vectorCount);
+
+	auto right = glm::normalize(glm::cross(camera.direction, camera.up));
+
+	camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
+														glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
+														glm::vec4{camera.direction, 0.0f} });
+
+	right = glm::normalize(glm::cross(camera.up, camera.direction));
+
+	camera.previous = camera.position;
+	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
+	static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
+#endif
 
 	auto replacement = camera.position - camera.previous;
 	auto direction = glm::normalize(replacement);
@@ -572,10 +602,39 @@ void updateControls() {
 }
 
 bool visible(hld::Portal& portal, hld::Node& node) {
-	if (portal.mesh.room == node.camera.room)
+	if (portal.mesh.room == node.camera.room && portal.pairIndex != node.portalIndex)
 		return true;
 	else
 		return false;
+}
+
+float sign(float value)
+{
+	if (value > 0.0f)
+		return 1.0f;
+	if (value < 0.0f)
+		return -1.0f;
+	return 0.0f;
+}
+
+glm::mat4 cullOblique(hld::Portal& portal) {
+	auto portalProjection = projection;
+	auto plane = glm::vec4{ portal.direction, glm::dot(portal.direction, portal.mesh.origin) };
+
+	glm::vec4 quaternion{};
+	quaternion.x = (sign(plane.x) + portalProjection[2][0]) / portalProjection[0][0];
+	quaternion.y = (sign(plane.y) + portalProjection[2][1]) / portalProjection[1][1];
+	quaternion.z = -1.0f;
+	quaternion.w = (1.0f + portalProjection[2][2]) / portalProjection[3][2];
+
+	glm::vec4 clip = plane * (2.0f / glm::dot(plane, quaternion));
+
+	portalProjection[0][2] = clip.x;
+	portalProjection[1][2] = clip.y;
+	portalProjection[2][2] = clip.z + 1.0F;
+	portalProjection[3][2] = clip.w;
+
+	return portalProjection;
 }
 
 void generateNodes() {
@@ -608,7 +667,10 @@ void generateNodes() {
 					parentNode.camera.previous
 				};
 
-				auto portalTransform = projection * glm::lookAt(portalCamera.position,
+				auto portalProjection = projection;
+				//auto portalProjection = cullOblique(portal);
+
+				auto portalTransform = portalProjection * glm::lookAt(portalCamera.position,
 					portalCamera.position + portalCamera.direction, portalCamera.up);
 
 				hld::Node portalNode{ parentNode.layer + 1, parentIndex, i, portalCamera, portalTransform };
@@ -626,6 +688,57 @@ void generateNodes() {
 void drawMesh(hld::Mesh& mesh) {
 	glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
 	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
+}
+
+void drawNodeView(uint8_t nodeIndex) {
+	auto& node = nodes.at(nodeIndex);
+	uint8_t mod = node.layer % 2;
+
+	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &node.transform, GL_DYNAMIC_DRAW);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+	if (!mod) {
+		uint8_t value = nodeIndex;
+
+		glStencilFunc(GL_EQUAL, value, 0x0F);
+		glStencilMask(0xF0);
+	}
+
+	else {
+		uint8_t value = nodeIndex << 4;
+
+		glStencilFunc(GL_EQUAL, value, 0xF0);
+		glStencilMask(0x0F);
+	}
+
+	for (auto& mesh : meshes)
+		drawMesh(mesh);
+
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+	for (uint8_t childIndex = nodeIndex + 1; childIndex < nodes.size(); childIndex++) {
+		auto& childNode = nodes.at(childIndex);
+
+		if (nodeIndex == childNode.parentIndex) {
+			if (!mod) {
+				uint8_t value = (childIndex << 4) + nodeIndex;
+
+				glStencilFunc(GL_EQUAL, value, 0x0F);
+				glStencilMask(0xF0);
+			}
+
+			else {
+				uint8_t value = (nodeIndex << 4) + childIndex;
+
+				glStencilFunc(GL_EQUAL, value, 0xF0);
+				glStencilMask(0x0F);
+			}
+
+			auto& portalMesh = portals.at(childNode.portalIndex).mesh;
+			drawMesh(portalMesh);
+		}
+	}
 }
 
 void drawViewport() {
@@ -655,7 +768,7 @@ void drawViewport() {
 			glStencilFunc(GL_EQUAL, value, 0xF0);
 		}
 		else {
-			uint32_t value = (i << 4) + node.parentIndex;
+			uint8_t value = (i << 4) + node.parentIndex;
 
 			glStencilMask(0xF0);
 			glStencilFunc(GL_EQUAL, value, 0x0F);
@@ -688,6 +801,7 @@ void drawViewport() {
 }
 
 void drawScene() {
+#ifdef VR
 	ovrEyeRenderDesc eyeRenderDesc[2];
 	ovrPosef hmdToEyeViewPose[2];
 	ovrHmdDesc hmdDesc = ovr_GetHmdDesc(session);
@@ -730,8 +844,40 @@ void drawScene() {
 
 	ovrLayerHeader* layers = &layer.Header;
 	ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
+#else
+	glStencilMask(0xFF);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glViewport(0, 0, details.width, details.height);
+	//drawViewport();
+
+	for(uint8_t index = 0; index < nodes.size(); index++)
+		drawNodeView(index);
+#endif
 
 	state.frameCount++;
+}
+
+void storePixels() {
+	if (state.totalFrameCount < 1000)
+		return;
+
+	int depth = 3;
+	int size = details.width * details.height * depth;
+	uint8_t* pixels = static_cast<uint8_t*>(calloc(size, 1));
+
+	glReadPixels(0, 0, details.width, details.height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+	std::ofstream file("image.ppm");
+	file << "P3\n" << details.width << " " << details.height << "\n255\n";
+
+	for (int i = 0; i < size; i++) {
+		file << (uint32_t)pixels[i] << " ";
+
+		if(i % depth == depth - 1)
+			file << "\n";
+	}
+
+	exit(0);
 }
 
 void updateFeedbacks() {
@@ -756,17 +902,36 @@ void draw() {
 		generateNodes();
 		drawScene();
 		updateFeedbacks();
+
+		//storePixels();
+		glBlitNamedFramebuffer(FBO,
+			0,
+			0,
+			0,
+			details.width,
+			details.height,
+			0,
+			0,
+			details.width,
+			details.height,
+			GL_COLOR_BUFFER_BIT,
+			GL_LINEAR);
+
 		glfwSwapBuffers(window);
+
 
 		//std::this_thread::sleep_until(state.currentTime + std::chrono::milliseconds(1));
 	}
 }
 
 void clean() {
-	glfwTerminate();
+	glDeleteFramebuffers(1, &FBO);
 
+	glfwTerminate();
+#ifdef VR
 	ovr_Destroy(session);
 	ovr_Shutdown();
+#endif
 }
 
 int main()

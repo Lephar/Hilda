@@ -62,7 +62,6 @@ namespace hld {
 	struct Details {
 		uint32_t width;
 		uint32_t height;
-		uint32_t imageCount;
 		uint32_t portalCount;
 		uint32_t meshCount;
 		uint32_t maxCameraCount;
@@ -70,10 +69,8 @@ namespace hld {
 
 	struct State {
 		uint32_t currentImage;
+		uint32_t frameCount;
 		uint32_t totalFrameCount;
-		std::atomic<uint32_t> frameCount;
-		std::atomic<uint32_t> recordingCount;
-		std::atomic<bool> threadsActive;
 		double_t timeDelta;
 		double_t checkPoint;
 		std::chrono::time_point<std::chrono::high_resolution_clock> previousTime;
