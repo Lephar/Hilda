@@ -24,6 +24,7 @@
 #include <mutex>
 #include <semaphore>
 #include <shared_mutex>
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -60,8 +61,11 @@ namespace hld {
 	};
 
 	struct Details {
-		uint32_t width;
-		uint32_t height;
+		uint32_t windowWidth;
+		uint32_t windowHeight;
+		uint32_t headsetWidth;
+		uint32_t headsetHeight;
+		int32_t headsetImageCount;
 		uint32_t portalCount;
 		uint32_t meshCount;
 		uint32_t maxCameraCount;

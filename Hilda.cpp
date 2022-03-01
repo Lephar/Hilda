@@ -1,17 +1,16 @@
 #include "Hilda.hpp"
 
-//#define VR
-
 GLFWwindow* window;
 
 tinygltf::TinyGLTF objectLoader;
 
+bool VR;
+
 ovrSession session;
 ovrGraphicsLuid luid;
 ovrHmdDesc hmdDesc;
-ovrSizei resolution;
-ovrSizei bufferSize;
 ovrTextureSwapChain swapchain;
+std::unordered_map<int, GLuint> framebuffers;
 
 hld::Controls controls;
 hld::Details details;
@@ -94,7 +93,7 @@ void resizeEvent(GLFWwindow* handle, int width, int height) {
 	static_cast<void>(width);
 	static_cast<void>(height);
 
-	glfwSetWindowSize(handle, details.width, details.width);
+	glfwSetWindowSize(handle, details.windowWidth, details.windowHeight);
 }
 
 glm::mat4 getNodeTranslation(const tinygltf::Node& node) {
@@ -274,8 +273,8 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 		origin = camera.position;
 		forward = glm::vec4{ camera.direction, 0.0f };
 
-		projection = glm::perspective(glm::radians(45.0f), static_cast<float_t>(details.width) / static_cast<float_t>(details.height),
-			0.01f, 1000.0f);
+		projection = glm::perspective(glm::radians(45.0f),
+			static_cast<float_t>(details.windowWidth) / static_cast<float_t>(details.windowHeight), 0.01f, 1000.0f);
 	}
 
 	else {
@@ -377,7 +376,9 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 }
 
 void initializeStates() {
-	details.maxCameraCount = 14;	// 2 ^ 4 - 1 - 1
+	details.windowWidth = 800;
+	details.windowHeight = 600;
+	details.maxCameraCount = 15;	// 2 ^ 4 - 1 - 1
 
 	controls.keyW = false;
 	controls.keyA = false;
@@ -394,26 +395,8 @@ void initializeStates() {
 }
 
 void initializeContext() {
-#ifdef VR
-	ovrResult result;
-
-	result = ovr_Initialize(nullptr);
-
-	if (OVR_FAILURE(result))
-		std::cout << "Failed Init" << std::endl;
-
-	result = ovr_Create(&session, &luid);
-
-	if (OVR_FAILURE(result))
-		std::cout << "Failed Create" << std::endl;
-
-	hmdDesc = ovr_GetHmdDesc(session);
-	details.width = hmdDesc.Resolution.w;
-	details.height = hmdDesc.Resolution.h;
-#else
-	details.width = 800;
-	details.height = 600;
-#endif
+	ovr_Initialize(nullptr);
+	VR = OVR_SUCCESS(ovr_Create(&session, &luid));
 
 	glfwInit();
 
@@ -421,9 +404,9 @@ void initializeContext() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	//glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
+	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
 
-	window = glfwCreateWindow(details.width, details.height, "", nullptr, nullptr);
+	window = glfwCreateWindow(details.windowWidth, details.windowHeight, "", nullptr, nullptr);
 
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, keyboardCallback);
@@ -431,10 +414,47 @@ void initializeContext() {
 	glfwSetFramebufferSizeCallback(window, resizeEvent);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
+	glfwSwapInterval(0);
 
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+}
 
-	glfwSwapInterval(0);
+GLuint createFramebufferRenderBuffer(uint32_t width, uint32_t height) {
+	GLuint renderBuffer;
+
+	glGenRenderbuffers(1, &renderBuffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
+
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, width, height);
+
+	return renderBuffer;
+}
+
+GLuint createFramebufferColorTexture(uint32_t width, uint32_t height) {
+	GLuint colorTexture;
+
+	glGenTextures(1, &colorTexture);
+	glBindTexture(GL_TEXTURE_2D, colorTexture);
+	
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+	
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	return colorTexture;
+}
+
+GLuint createFramebuffer(GLuint renderBuffer, GLuint colorTexture) {
+	GLuint framebuffer;
+
+	glGenFramebuffers(1, &framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBuffer);
+
+	glBindTexture(GL_TEXTURE_2D, colorTexture);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
 }
 
 void setupGraphics() {
@@ -462,43 +482,42 @@ void setupGraphics() {
 	glDeleteShader(fragmentShader);
 	glUseProgram(shaderProgram);
 
-#ifdef VR
-	ovrSizei recommenedTex0Size = ovr_GetFovTextureSize(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0], 1.0f);
-	ovrSizei recommenedTex1Size = ovr_GetFovTextureSize(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1], 1.0f);
+	if(VR) {
+		hmdDesc = ovr_GetHmdDesc(session);
 
-	bufferSize.w = recommenedTex0Size.w + recommenedTex1Size.w;
-	bufferSize.h = std::max(recommenedTex0Size.h, recommenedTex1Size.h);
+		ovrSizei leftEyeSize = ovr_GetFovTextureSize(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0], 1.0f);
+		ovrSizei rightEyeSize = ovr_GetFovTextureSize(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1], 1.0f);
 
-	ovrTextureSwapChainDesc swapchainDesc{};
-	swapchainDesc.Type = ovrTexture_2D;
-	swapchainDesc.ArraySize = 1;
-	swapchainDesc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
-	swapchainDesc.Width = bufferSize.w;
-	swapchainDesc.Height = bufferSize.h;
-	swapchainDesc.MipLevels = 1;
-	swapchainDesc.SampleCount = 1;
-	swapchainDesc.StaticImage = ovrFalse;
+		details.headsetWidth = leftEyeSize.w + rightEyeSize.w;
+		details.headsetHeight = std::max(leftEyeSize.h, rightEyeSize.h);
 
-	if (ovr_CreateTextureSwapChainGL(session, &swapchainDesc, &swapchain) != ovrSuccess)
-		std::cout << "Failed Swapchain" << std::endl;
-#endif
+		ovrTextureSwapChainDesc swapchainDesc{};
+		swapchainDesc.Type = ovrTexture_2D;
+		swapchainDesc.ArraySize = 1;
+		swapchainDesc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
+		swapchainDesc.Width = details.headsetWidth;
+		swapchainDesc.Height = details.headsetHeight;
+		swapchainDesc.MipLevels = 1;
+		swapchainDesc.SampleCount = 1;
+		swapchainDesc.StaticImage = ovrFalse;
 
-	glGenFramebuffers(1, &FBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+		ovr_CreateTextureSwapChainGL(session, &swapchainDesc, &swapchain);
+		ovr_GetTextureSwapChainLength(session, swapchain, &details.headsetImageCount);
 
-	GLuint framebufferColorTexture;
-	glGenTextures(1, &framebufferColorTexture);
-	glBindTexture(GL_TEXTURE_2D, framebufferColorTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, details.width, details.height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebufferColorTexture, 0);
+		for (int imageIndex = 0; imageIndex < details.headsetImageCount; imageIndex++) {
+			GLuint swapchainColorTexture;
+			ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &swapchainColorTexture);
 
-	GLuint renderBuffer;
-	glGenRenderbuffers(1, &renderBuffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, details.width, details.height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBuffer);
+			GLuint swapchainRenderBuffer = createFramebufferRenderBuffer(details.headsetWidth, details.headsetHeight);
+			GLuint swapchainFramebuffer = createFramebuffer(swapchainRenderBuffer, swapchainColorTexture);
+
+			framebuffers.emplace(imageIndex, swapchainFramebuffer);
+		}
+	}
+
+	GLuint renderBuffer = createFramebufferRenderBuffer(details.windowWidth, details.windowHeight);
+	GLuint colorTexture = createFramebufferColorTexture(details.windowWidth, details.windowHeight);
+	FBO = createFramebuffer(renderBuffer, colorTexture);
 
 	glGenVertexArrays(1, &VAO);
 	glBindVertexArray(VAO);
@@ -928,10 +947,11 @@ void clean() {
 	glDeleteFramebuffers(1, &FBO);
 
 	glfwTerminate();
-#ifdef VR
-	ovr_Destroy(session);
+
+	if(VR)
+		ovr_Destroy(session);
+	
 	ovr_Shutdown();
-#endif
 }
 
 int main()
