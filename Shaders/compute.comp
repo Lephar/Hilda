@@ -1,0 +1,56 @@
+#version 460 core
+
+struct InstanceData 
+{
+	vec3 pos;
+	float scale;
+};
+
+struct IndexedIndirectCommand 
+{
+	uint indexCount;
+	uint instanceCount;
+	uint firstIndex;
+	uint vertexOffset;
+	uint firstInstance;
+};
+
+layout (binding = 0) uniform Planes 
+{
+	vec4 frustumPlanes[6];
+};
+
+layout (binding = 1) buffer Instances 
+{
+   InstanceData instances[];
+};
+
+layout (binding = 2) writeonly buffer Draws
+{
+	IndexedIndirectCommand indirectDraws[];
+};
+
+layout (local_size_x = 16) in;
+
+bool frustumCheck(vec4 pos, float radius)
+{
+	for (int i = 0; i < 6; i++) 
+		if (dot(pos, frustumPlanes[i]) + radius < 0.0)
+			return false;
+
+	return true;
+}
+
+layout (local_size_x = 16) in;
+
+void main()
+{
+	uint idx = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+	vec4 pos = vec4(instances[idx].pos.xyz, 1.0);
+
+	if (frustumCheck(pos, 1.0))
+		indirectDraws[idx].instanceCount = 1;
+
+	else
+		indirectDraws[idx].instanceCount = 0;
+}
