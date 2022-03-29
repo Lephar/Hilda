@@ -138,7 +138,7 @@ void createCameraFromMatrix(hld::Camera& camera, const glm::mat4& transformation
 void loadTexture(std::string name) {
 	hld::Image image{};
 
-	auto pixels = stbi_load(("assets/" + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
+	auto pixels = stbi_load(("Assets/backroom/" + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
 	image.channel = 4;
 
 	glGenTextures(1, &image.texture);
@@ -256,7 +256,7 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 	std::string error, warning;
 	tinygltf::Model model;
 
-	auto result = objectLoader.LoadASCIIFromFile(&model, &error, &warning, "assets/" + name + ".gltf");
+	auto result = objectLoader.LoadASCIIFromFile(&model, &error, &warning, "Assets/backroom/" + name + ".gltf");
 
 #ifndef NDEBUG
 	if (!warning.empty())
@@ -326,7 +326,7 @@ void createScene() {
 GLuint createShader(std::string path, GLenum type)
 {
 	std::ifstream file;
-	file.open(path.c_str());
+	file.open(("Shaders/" + path).c_str());
 	std::stringstream stream;
 	stream << file.rdbuf();
 	file.close();
@@ -455,6 +455,8 @@ GLuint createFramebuffer(GLuint renderBuffer, GLuint colorTexture) {
 
 	glBindTexture(GL_TEXTURE_2D, colorTexture);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
+
+	return framebuffer;
 }
 
 void setupGraphics() {
@@ -472,8 +474,8 @@ void setupGraphics() {
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-	GLuint vertexShader = createShader("shaders/vertex.vert", GL_VERTEX_SHADER);
-	GLuint fragmentShader = createShader("shaders/fragment.frag", GL_FRAGMENT_SHADER);
+	GLuint vertexShader = createShader("vertex.vert", GL_VERTEX_SHADER);
+	GLuint fragmentShader = createShader("fragment.frag", GL_FRAGMENT_SHADER);
 	shaderProgram = createProgram(vertexShader, fragmentShader);
 
 	glDetachShader(shaderProgram, vertexShader);
@@ -866,7 +868,7 @@ void drawScene() {
 #else
 	glStencilMask(0xFF);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	glViewport(0, 0, details.width, details.height);
+	glViewport(0, 0, details.windowWidth, details.windowHeight);
 	//drawViewport();
 
 	for(uint8_t index = 0; index < nodes.size(); index++)
@@ -881,13 +883,13 @@ void storePixels() {
 		return;
 
 	int depth = 3;
-	int size = details.width * details.height * depth;
+	int size = details.windowWidth * details.windowHeight * depth;
 	uint8_t* pixels = static_cast<uint8_t*>(calloc(size, 1));
 
-	glReadPixels(0, 0, details.width, details.height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+	glReadPixels(0, 0, details.windowWidth, details.windowHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
 
 	std::ofstream file("image.ppm");
-	file << "P3\n" << details.width << " " << details.height << "\n255\n";
+	file << "P3\n" << details.windowWidth << " " << details.windowHeight << "\n255\n";
 
 	for (int i = 0; i < size; i++) {
 		file << (uint32_t)pixels[i] << " ";
@@ -927,12 +929,12 @@ void draw() {
 			0,
 			0,
 			0,
-			details.width,
-			details.height,
+			details.windowWidth,
+			details.windowHeight,
 			0,
 			0,
-			details.width,
-			details.height,
+			details.windowWidth,
+			details.windowHeight,
 			GL_COLOR_BUFFER_BIT,
 			GL_LINEAR);
 
