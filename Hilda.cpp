@@ -12,22 +12,22 @@ ovrHmdDesc hmdDesc;
 ovrTextureSwapChain swapchain;
 std::unordered_map<int, GLuint> framebuffers;
 
-hld::Controls controls;
-hld::Details details;
-hld::State state;
-hld::Camera camera;
+Controls controls;
+Details details;
+State state;
+Camera camera;
 
 glm::vec3 origin;
 glm::vec4 forward;
 glm::mat4 projection;
 
 std::vector<GLushort> indices;
-std::vector<hld::Vertex> vertices;
+std::vector<Vertex> vertices;
 std::vector<std::string> imageNames;
-std::vector<hld::Image> textures;
-std::vector<hld::Mesh> meshes;
-std::vector<hld::Portal> portals;
-std::vector<hld::Node> nodes;
+std::vector<Image> textures;
+std::vector<Mesh> meshes;
+std::vector<Portal> portals;
+std::vector<Node> nodes;
 
 GLuint FBO;
 GLuint VAO;
@@ -35,6 +35,9 @@ GLuint VBO;
 GLuint EBO;
 GLuint UBO;
 GLuint shaderProgram;
+
+std::string assetFolder;
+std::string shaderFolder;
 
 std::ostream& operator<<(std::ostream& os, glm::vec2& vector) {
 	return os << vector.x << " " << vector.y << std::endl;
@@ -44,11 +47,11 @@ std::ostream& operator<<(std::ostream& os, glm::vec3& vector) {
 	return os << vector.x << " " << vector.y << " " << vector.z << std::endl;
 }
 
-std::ostream& operator<<(std::ostream& os, hld::Vertex& vertex) {
+std::ostream& operator<<(std::ostream& os, Vertex& vertex) {
 	return os << vertex.position << vertex.normal << vertex.texture << std::endl;
 }
 
-std::ostream& operator<<(std::ostream& os, hld::Node& node) {
+std::ostream& operator<<(std::ostream& os, Node& node) {
 	return os << node.layer << " " << node.parentIndex << " " << node.portalIndex << std::endl;
 }
 
@@ -127,7 +130,7 @@ glm::mat4 getNodeTransformation(const tinygltf::Node& node) {
 	return getNodeTranslation(node) * getNodeRotation(node) * getNodeScale(node);
 }
 
-void createCameraFromMatrix(hld::Camera& camera, const glm::mat4& transformation, uint32_t room) {
+void createCameraFromMatrix(Camera& camera, const glm::mat4& transformation, uint32_t room) {
 	camera.room = room;
 	camera.position = transformation * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
 	camera.direction = transformation * glm::vec4{ 0.0f, -1.0f, 0.0f, 0.0f };
@@ -136,9 +139,9 @@ void createCameraFromMatrix(hld::Camera& camera, const glm::mat4& transformation
 }
 
 void loadTexture(std::string name) {
-	hld::Image image{};
+	Image image{};
 
-	auto pixels = stbi_load(("Assets/backroom/" + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
+	auto pixels = stbi_load((assetFolder + name + ".jpg").c_str(), &image.width, &image.height, &image.channel, STBI_rgb_alpha);
 	image.channel = 4;
 
 	glGenTextures(1, &image.texture);
@@ -156,7 +159,7 @@ void loadTexture(std::string name) {
 	stbi_image_free(pixels);
 }
 
-void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, hld::Type type,
+void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, Type type,
 	const glm::mat4& translation, const glm::mat4& rotation, const glm::mat4& scale, uint8_t room) {
 	for(auto& primitive : meshData.primitives) {
 		auto& indexReference = modelData.bufferViews.at(primitive.indices);
@@ -171,7 +174,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 			}
 		}
 
-		hld::Mesh mesh{};
+		Mesh mesh{};
 
 		mesh.indexOffset = indices.size();
 		mesh.indexLength = indexReference.byteLength / sizeof(GLushort);
@@ -210,7 +213,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		mesh.textureIndex = textureIndex;
 
 		for (auto index = 0u; index < mesh.vertexLength; index++) {
-			hld::Vertex vertex{};
+			Vertex vertex{};
 			vertex.position = mesh.transform * glm::vec4{ positions.at(index), 1.0f };
 			vertex.normal = glm::normalize(glm::vec3{ mesh.transform * glm::vec4{ glm::normalize(normals.at(index)), 0.0f } });
 			vertex.texture = texcoords.at(index);
@@ -235,13 +238,13 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		mesh.minBorders = min;
 		mesh.maxBorders = max;
 
-		if (type == hld::Type::Mesh) {
+		if (type == Type::Mesh) {
 			details.meshCount++;
 			meshes.push_back(mesh);
 		}
 
-		else if (type == hld::Type::Portal) {
-			hld::Portal portal{};
+		else if (type == Type::Portal) {
+			Portal portal{};
 
 			portal.mesh = mesh;
 			portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
@@ -252,11 +255,11 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	}
 }
 
-void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, uint8_t targetRoom = 0) {
+void loadModel(const std::string name, Type type, uint8_t sourceRoom = 0, uint8_t targetRoom = 0) {
 	std::string error, warning;
 	tinygltf::Model model;
 
-	auto result = objectLoader.LoadASCIIFromFile(&model, &error, &warning, "Assets/backroom/" + name + ".gltf");
+	auto result = objectLoader.LoadASCIIFromFile(&model, &error, &warning, assetFolder + name + ".gltf");
 
 #ifndef NDEBUG
 	if (!warning.empty())
@@ -267,7 +270,7 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 		return;
 #endif
 
-	if (type == hld::Type::Camera) {
+	if (type == Type::Camera) {
 		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), sourceRoom);
 
 		origin = camera.position;
@@ -290,7 +293,7 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 			loadMesh(model, mesh, type, getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), sourceRoom);
 		}
 
-		if (type == hld::Type::Portal) {
+		if (type == Type::Portal) {
 			auto& bluePortal = portals.at(portals.size() - 2);
 			auto& orangePortal = portals.at(portals.size() - 1);
 			auto portalRotation = glm::rotate(glm::radians(180.0f), glm::vec3{ 0.0f, 0.0f, 1.0f });
@@ -305,28 +308,36 @@ void loadModel(const std::string name, hld::Type type, uint8_t sourceRoom = 0, u
 }
 
 void createScene() {
-	loadModel("camera", hld::Type::Camera, 1);
+	assetFolder = "Assets/backroom/";
 
-	loadModel("portal12", hld::Type::Portal, 1, 2);
-	loadModel("portal13", hld::Type::Portal, 1, 3);
-	loadModel("portal14", hld::Type::Portal, 1, 4);
-	loadModel("portal15", hld::Type::Portal, 1, 5);
-	loadModel("portal26", hld::Type::Portal, 2, 6);
+	loadModel("camera", Type::Camera, 1);
 
-	loadModel("room1", hld::Type::Mesh, 1);
-	loadModel("room2", hld::Type::Mesh, 2);
-	loadModel("room3", hld::Type::Mesh, 3);
-	loadModel("room4", hld::Type::Mesh, 4);
-	loadModel("room5", hld::Type::Mesh, 5);
-	loadModel("room6", hld::Type::Mesh, 6);
+	loadModel("portal12", Type::Portal, 1, 2);
+	loadModel("portal13", Type::Portal, 1, 3);
+	loadModel("portal14", Type::Portal, 1, 4);
+	loadModel("portal15", Type::Portal, 1, 5);
+	loadModel("portal26", Type::Portal, 2, 6);
+
+	loadModel("room1", Type::Mesh, 1);
+	loadModel("room2", Type::Mesh, 2);
+	loadModel("room3", Type::Mesh, 3);
+	loadModel("room4", Type::Mesh, 4);
+	loadModel("room5", Type::Mesh, 5);
+	loadModel("room6", Type::Mesh, 6);
 	
-	//loadModel("italy", hld::Type::Mesh, 1);
+	/*
+	assetFolder = "Assets/italy/";
+
+	loadModel("camera", Type::Camera, 1);
+
+	loadModel("italy", Type::Mesh, 1);
+	*/
 }
 
 GLuint createShader(std::string path, GLenum type)
 {
 	std::ifstream file;
-	file.open(("Shaders/" + path).c_str());
+	file.open((shaderFolder + path).c_str());
 	std::stringstream stream;
 	stream << file.rdbuf();
 	file.close();
@@ -474,6 +485,7 @@ void setupGraphics() {
 
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+	shaderFolder = "Shaders/";
 	GLuint vertexShader = createShader("vertex.vert", GL_VERTEX_SHADER);
 	GLuint fragmentShader = createShader("fragment.frag", GL_FRAGMENT_SHADER);
 	shaderProgram = createProgram(vertexShader, fragmentShader);
@@ -526,12 +538,12 @@ void setupGraphics() {
 
 	glGenBuffers(1, &VBO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(hld::Vertex) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)0);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)0);
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)sizeof(glm::vec3));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)sizeof(glm::vec3));
 	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(hld::Vertex), (GLvoid*)(2 * sizeof(glm::vec3)));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (GLvoid*)(2 * sizeof(glm::vec3)));
 	glEnableVertexAttribArray(2);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -558,48 +570,50 @@ void updateControls() {
 	state.timeDelta = std::chrono::duration<double_t, std::chrono::seconds::period>(state.currentTime - state.previousTime).count();
 	state.checkPoint += state.timeDelta;
 
-#ifdef VR
-	ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
+	if (VR) {
+		ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
 
-	if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
-	{
-		ovrPosef pose = ts.HeadPose.ThePose;
+		if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
+		{
+			ovrPosef pose = ts.HeadPose.ThePose;
 
-		//std::cout << pose.Position.x << " " << pose.Position.y << " " << pose.Position.z << std::endl;
-		//std::cout << pose.Orientation.w << " " << pose.Orientation.x << " " << pose.Orientation.y << " " << pose.Orientation.z << std::endl << std::endl;
+			//std::cout << pose.Position.x << " " << pose.Position.y << " " << pose.Position.z << std::endl;
+			//std::cout << pose.Orientation.w << " " << pose.Orientation.x << " " << pose.Orientation.y << " " << pose.Orientation.z << std::endl << std::endl;
+
+			camera.previous = camera.position;
+			camera.position = origin + glm::vec3{ -pose.Position.z + 0.5f, -pose.Position.x + 0.5f, pose.Position.y + 0.5f } *10.0f;
+
+			glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y });
+			camera.direction = rotation * forward;
+		}
+	}
+
+	else {
+		auto moveDelta = state.timeDelta * 6.0, turnDelta = glm::radians(0.1);
+		auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
+
+		if (vectorCount > 0)
+			moveDelta /= std::sqrt(vectorCount);
+
+		auto right = glm::normalize(glm::cross(camera.direction, camera.up));
+
+		camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
+															glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
+															glm::vec4{camera.direction, 0.0f} });
+
+		right = glm::normalize(glm::cross(camera.up, camera.direction));
 
 		camera.previous = camera.position;
-		camera.position = origin + glm::vec3{ -pose.Position.z + 0.5f, -pose.Position.x + 0.5f, pose.Position.y + 0.5f } * 10.0f;
-
-		glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y});
-		camera.direction = rotation * forward;
+		camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
+		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
 	}
-#else
-	auto moveDelta = state.timeDelta * 6.0, turnDelta = glm::radians(0.1);
-	auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
-
-	if (vectorCount > 0)
-		moveDelta /= std::sqrt(vectorCount);
-
-	auto right = glm::normalize(glm::cross(camera.direction, camera.up));
-
-	camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
-														glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
-														glm::vec4{camera.direction, 0.0f} });
-
-	right = glm::normalize(glm::cross(camera.up, camera.direction));
-
-	camera.previous = camera.position;
-	camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
-	static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
-#endif
 
 	auto replacement = camera.position - camera.previous;
 	auto direction = glm::normalize(replacement);
 	auto coefficient = 0.0f, distance = glm::length(replacement);
 
 	for (auto& portal : portals) {
-		if (hld::epsilon < distance && glm::intersectRayPlane(camera.previous, direction, portal.mesh.origin, portal.direction, coefficient)) {
+		if (epsilon < distance && glm::intersectRayPlane(camera.previous, direction, portal.mesh.origin, portal.direction, coefficient)) {
 			auto point = camera.previous + coefficient * direction;
 
 			if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
@@ -622,7 +636,7 @@ void updateControls() {
 	controls.deltaY = 0.0f;
 }
 
-bool visible(hld::Portal& portal, hld::Node& node) {
+bool visible(Portal& portal, Node& node) {
 	if (portal.mesh.room == node.camera.room && portal.pairIndex != node.portalIndex)
 		return true;
 	else
@@ -638,7 +652,7 @@ float sign(float value)
 	return 0.0f;
 }
 
-glm::mat4 cullOblique(hld::Portal& portal) {
+glm::mat4 cullOblique(Portal& portal) {
 	auto portalProjection = projection;
 	auto plane = glm::vec4{ portal.direction, glm::dot(portal.direction, portal.mesh.origin) };
 
@@ -661,11 +675,11 @@ glm::mat4 cullOblique(hld::Portal& portal) {
 void generateNodes() {
 	nodes.clear();
 
-	std::queue<hld::Node> queue;
+	std::queue<Node> queue;
 
 	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
 
-	hld::Node mainNode{ 0, -1, -1, camera, transform };
+	Node mainNode{ 0, -1, -1, camera, transform };
 
 	queue.push(mainNode);
 	nodes.push_back(mainNode);
@@ -680,7 +694,7 @@ void generateNodes() {
 			auto& portal = portals.at(i);
 
 			if (visible(portal, parentNode)) {
-				hld::Camera portalCamera {
+				Camera portalCamera {
 					portal.targetRoom,
 					portal.cameraTransform * glm::vec4{ parentNode.camera.position, 1.0f },
 					portal.cameraTransform * glm::vec4{ parentNode.camera.direction, 0.0f },
@@ -694,7 +708,7 @@ void generateNodes() {
 				auto portalTransform = portalProjection * glm::lookAt(portalCamera.position,
 					portalCamera.position + portalCamera.direction, portalCamera.up);
 
-				hld::Node portalNode{ parentNode.layer + 1, parentIndex, i, portalCamera, portalTransform };
+				Node portalNode{ parentNode.layer + 1, parentIndex, i, portalCamera, portalTransform };
 
 				queue.push(portalNode);
 				nodes.push_back(portalNode);
@@ -706,7 +720,7 @@ void generateNodes() {
 	}
 }
 
-void drawMesh(hld::Mesh& mesh) {
+void drawMesh(Mesh& mesh) {
 	glBindTexture(GL_TEXTURE_2D, textures.at(mesh.textureIndex).texture);
 	glDrawElementsBaseVertex(GL_TRIANGLES, mesh.indexLength, GL_UNSIGNED_SHORT, (GLvoid*)(mesh.indexOffset * sizeof(GLushort)), mesh.vertexOffset);
 }
@@ -822,58 +836,59 @@ void drawViewport() {
 }
 
 void drawScene() {
-#ifdef VR
-	ovrEyeRenderDesc eyeRenderDesc[2];
-	ovrPosef hmdToEyeViewPose[2];
-	ovrHmdDesc hmdDesc = ovr_GetHmdDesc(session);
-	eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
-	eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
-	hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
-	hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
+	if (VR) {
+		ovrEyeRenderDesc eyeRenderDesc[2];
+		ovrPosef hmdToEyeViewPose[2];
+		ovrHmdDesc hmdDesc = ovr_GetHmdDesc(session);
+		eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
+		eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
+		hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
+		hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
 
-	ovrLayerEyeFov layer;
-	layer.Header.Type = ovrLayerType_EyeFov;
-	layer.Header.Flags = 0;
-	layer.ColorTexture[0] = swapchain;
-	layer.ColorTexture[1] = swapchain;
-	layer.Fov[0] = eyeRenderDesc[0].Fov;
-	layer.Fov[1] = eyeRenderDesc[1].Fov;
-	layer.Viewport[0] = ovrRecti{ 0, 0, bufferSize.w / 2, bufferSize.h };
-	layer.Viewport[1] = ovrRecti{ bufferSize.w / 2, 0, bufferSize.w / 2, bufferSize.h };
+		ovrLayerEyeFov layer;
+		layer.Header.Type = ovrLayerType_EyeFov;
+		layer.Header.Flags = 0;
+		layer.ColorTexture[0] = swapchain;
+		layer.ColorTexture[1] = swapchain;
+		layer.Fov[0] = eyeRenderDesc[0].Fov;
+		layer.Fov[1] = eyeRenderDesc[1].Fov;
+		layer.Viewport[0] = ovrRecti{ 0, 0, static_cast<int>(details.headsetWidth) / 2, static_cast<int>(details.headsetHeight) };
+		layer.Viewport[1] = ovrRecti{ static_cast<int>(details.headsetWidth) / 2, 0, static_cast<int>(details.headsetWidth) / 2, static_cast<int>(details.headsetHeight) };
 
-	int imageIndex = -1;
-	ovr_GetTextureSwapChainCurrentIndex(session, swapchain, &imageIndex);
+		int imageIndex = -1;
+		ovr_GetTextureSwapChainCurrentIndex(session, swapchain, &imageIndex);
 
-	unsigned int textureID;
-	ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &textureID);
+		unsigned int textureID;
+		ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &textureID);
 
-	//glBindTexture(GL_TEXTURE_2D, textureID);
-	//glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0);
+		//glBindTexture(GL_TEXTURE_2D, textureID);
+		//glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0);
 
-	ovr_WaitToBeginFrame(session, state.frameCount);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		ovr_WaitToBeginFrame(session, state.frameCount);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	ovr_BeginFrame(session, state.frameCount);
+		ovr_BeginFrame(session, state.frameCount);
 
-	glViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
-	drawViewport();
+		glViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
+		drawViewport();
 
-	glViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
-	drawViewport();
+		glViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
+		drawViewport();
 
-	ovr_CommitTextureSwapChain(session, swapchain);
+		ovr_CommitTextureSwapChain(session, swapchain);
 
-	ovrLayerHeader* layers = &layer.Header;
-	ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
-#else
-	glStencilMask(0xFF);
-	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	glViewport(0, 0, details.windowWidth, details.windowHeight);
-	//drawViewport();
+		ovrLayerHeader* layers = &layer.Header;
+		ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
+	} 
+	
+	else {
+		glStencilMask(0xFF);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		glViewport(0, 0, details.windowWidth, details.windowHeight);
 
-	for(uint8_t index = 0; index < nodes.size(); index++)
-		drawNodeView(index);
-#endif
+		for (uint8_t index = 0; index < nodes.size(); index++)
+			drawNodeView(index);
+	}
 
 	state.frameCount++;
 }
