@@ -10,6 +10,9 @@ ovrSession session;
 ovrGraphicsLuid luid;
 ovrHmdDesc hmdDesc;
 ovrTextureSwapChain swapchain;
+ovrEyeRenderDesc eyeRenderDesc[2];
+ovrPosef hmdToEyeViewPose[2];
+ovrLayerEyeFov layer;
 std::unordered_map<int, GLuint> framebuffers;
 
 Controls controls;
@@ -527,6 +530,20 @@ void setupGraphics() {
 
 			framebuffers.emplace(imageIndex, swapchainFramebuffer);
 		}
+		
+		eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
+		eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
+		hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
+		hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
+
+		layer.Header.Type = ovrLayerType_EyeFov;
+		layer.Header.Flags = 0;
+		layer.ColorTexture[0] = swapchain;
+		layer.ColorTexture[1] = swapchain;
+		layer.Fov[0] = eyeRenderDesc[0].Fov;
+		layer.Fov[1] = eyeRenderDesc[1].Fov;
+		layer.Viewport[0] = ovrRecti(ovrVector2i(0, 0), ovrSizei(details.headsetWidth / 2, details.headsetHeight));
+		layer.Viewport[1] = ovrRecti(ovrVector2i(details.headsetWidth / 2, 0), ovrSizei(details.headsetWidth / 2, details.headsetHeight));
 	}
 
 	GLuint renderBuffer = createFramebufferRenderBuffer(details.windowWidth, details.windowHeight);
@@ -776,119 +793,66 @@ void drawNodeView(uint8_t nodeIndex) {
 	}
 }
 
-void drawViewport() {
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &nodes.front().transform, GL_DYNAMIC_DRAW);
-
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	glStencilFunc(GL_ALWAYS, 0, 0xFF);
-	glStencilMask(0x00);
-
-	for (auto& mesh : meshes)
-		drawMesh(mesh);
-	
-	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-
-	for (int i = 1; i < nodes.size(); i++) {
-		auto& node = nodes.at(i);
-		auto& parentNode = nodes.at(node.parentIndex);
-		auto& portal = portals.at(node.portalIndex);
-		uint32_t mod = node.layer % 2;
-
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &parentNode.transform, GL_DYNAMIC_DRAW);
-
-		if (!mod) {
-			uint8_t value = (node.parentIndex << 4) + i;
-
-			glStencilMask(0x0F);
-			glStencilFunc(GL_EQUAL, value, 0xF0);
-		}
-		else {
-			uint8_t value = (i << 4) + node.parentIndex;
-
-			glStencilMask(0xF0);
-			glStencilFunc(GL_EQUAL, value, 0x0F);
-		}
-
-		drawMesh(portal.mesh);
-	}
-
-	glClear(GL_DEPTH_BUFFER_BIT);
-
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	glStencilMask(0x00);
-
-	for (int i = 1; i < nodes.size(); i++) {
-		auto& node = nodes.at(i);
-		uint8_t mod = node.layer % 2;
-
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &node.transform, GL_DYNAMIC_DRAW);
-
-		if (!mod)
-			glStencilFunc(GL_EQUAL, i, 0x0F);
-		else
-			glStencilFunc(GL_EQUAL, i << 4, 0xF0);
-
-		for (auto& mesh : meshes)
-			drawMesh(mesh);
-	}
-
+void drawViewport(GLint x, GLint y, GLint w, GLint h) {
 	glStencilMask(0xFF);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glViewport(x, y, w, h);
+
+	for (uint8_t index = 0; index < nodes.size(); index++)
+		drawNodeView(index);
 }
 
 void drawScene() {
 	if (VR) {
-		ovrEyeRenderDesc eyeRenderDesc[2];
-		ovrPosef hmdToEyeViewPose[2];
-		ovrHmdDesc hmdDesc = ovr_GetHmdDesc(session);
-		eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
-		eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
-		hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
-		hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
-
-		ovrLayerEyeFov layer;
-		layer.Header.Type = ovrLayerType_EyeFov;
-		layer.Header.Flags = 0;
-		layer.ColorTexture[0] = swapchain;
-		layer.ColorTexture[1] = swapchain;
-		layer.Fov[0] = eyeRenderDesc[0].Fov;
-		layer.Fov[1] = eyeRenderDesc[1].Fov;
-		layer.Viewport[0] = ovrRecti{ 0, 0, static_cast<int>(details.headsetWidth) / 2, static_cast<int>(details.headsetHeight) };
-		layer.Viewport[1] = ovrRecti{ static_cast<int>(details.headsetWidth) / 2, 0, static_cast<int>(details.headsetWidth) / 2, static_cast<int>(details.headsetHeight) };
+		/*
+		double displayMidpointSeconds = ovr_GetPredictedDisplayTime(session, 0);
+		ovrTrackingState hmdState = ovr_GetTrackingState(session, displayMidpointSeconds, ovrTrue);
+		ovr_CalcEyePoses(hmdState.HeadPose.ThePose, hmdToEyeViewPose, layer.RenderPose);
+		*/
+		ovrResult result;
 
 		int imageIndex = -1;
 		ovr_GetTextureSwapChainCurrentIndex(session, swapchain, &imageIndex);
+		std::cout << "GetTextureSwapChainCurrentIndex: " << imageIndex << std::endl;
+		
+		result = ovr_WaitToBeginFrame(session, state.frameCount);
+		std::cout << "WaitToBeginFrame: " << result << std::endl;
 
-		unsigned int textureID;
-		ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &textureID);
+		auto& framebuffer = framebuffers.at(imageIndex);
+		std::cout << "Framebuffer: " << framebuffer << std::endl;
 
-		//glBindTexture(GL_TEXTURE_2D, textureID);
-		//glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, textureID, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-		ovr_WaitToBeginFrame(session, state.frameCount);
+		glStencilMask(0xFF);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-		ovr_BeginFrame(session, state.frameCount);
+		result = ovr_BeginFrame(session, state.frameCount);
+		std::cout << "BeginFrame: " << result << std::endl;
+		/*
+		for (int eye = 0; eye < 2; eye++) {
+			Vector3f pos = originPos + originRot.Transform(layer.RenderPose[eye].Position);
+			Matrix4f rot = originRot * Matrix4f(layer.RenderPose[eye].Orientation);
 
-		glViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
-		drawViewport();
+			Vector3f finalUp = rot.Transform(Vector3f(0, 1, 0));
+			Vector3f finalForward = rot.Transform(Vector3f(0, 0, -1));
+			Matrix4f view = Matrix4f::LookAtRH(pos, pos + finalForward, finalUp);
 
-		glViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
-		drawViewport();
+			Matrix4f proj = ovrMatrix4f_Projection(layer.Fov[eye], 0.2f, 1000.0f, 0);
+		}
+		*/
+
+		drawViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
+		drawViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
 
 		ovr_CommitTextureSwapChain(session, swapchain);
 
 		ovrLayerHeader* layers = &layer.Header;
-		ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
-	} 
-	
-	else {
-		glStencilMask(0xFF);
-		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-		glViewport(0, 0, details.windowWidth, details.windowHeight);
-
-		for (uint8_t index = 0; index < nodes.size(); index++)
-			drawNodeView(index);
+		result = ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
+		std::cout << "EndFrame: " << result << std::endl << std::endl;
 	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+	drawViewport(0, 0, details.windowWidth, details.windowHeight);
 
 	state.frameCount++;
 }
@@ -955,6 +919,8 @@ void draw() {
 
 		glfwSwapBuffers(window);
 
+		if (state.frameCount == 5)
+			exit(0);
 
 		//std::this_thread::sleep_until(state.currentTime + std::chrono::milliseconds(1));
 	}
