@@ -4,6 +4,9 @@ GLFWwindow* window;
 
 tinygltf::TinyGLTF objectLoader;
 
+std::string assetFolder;
+std::string shaderFolder;
+
 bool VR;
 
 ovrSession session;
@@ -38,9 +41,6 @@ GLuint VBO;
 GLuint EBO;
 GLuint UBO;
 GLuint shaderProgram;
-
-std::string assetFolder;
-std::string shaderFolder;
 
 std::ostream& operator<<(std::ostream& os, glm::vec2& vector) {
 	return os << vector.x << " " << vector.y << std::endl;
@@ -311,8 +311,9 @@ void loadModel(const std::string name, Type type, uint8_t sourceRoom = 0, uint8_
 }
 
 void createScene() {
+	/*
 	assetFolder = "Assets/backroom/";
-
+	
 	loadModel("camera", Type::Camera, 1);
 
 	loadModel("portal12", Type::Portal, 1, 2);
@@ -327,14 +328,34 @@ void createScene() {
 	loadModel("room4", Type::Mesh, 4);
 	loadModel("room5", Type::Mesh, 5);
 	loadModel("room6", Type::Mesh, 6);
+	*/
 	
-	/*
+	// TODO: Fix portal association
 	assetFolder = "Assets/italy/";
 
-	loadModel("camera", Type::Camera, 1);
+	loadModel("camera", Type::Camera, 2);
 
-	loadModel("italy", Type::Mesh, 1);
-	*/
+	loadModel("portal12", Type::Portal, 2, 1);
+	loadModel("portal23", Type::Portal, 3, 2);
+	loadModel("portal34", Type::Portal, 4, 3);
+	loadModel("portal45", Type::Portal, 5, 4);
+	loadModel("portal56", Type::Portal, 6, 5);
+	loadModel("portal67", Type::Portal, 7, 6);
+	loadModel("portal78", Type::Portal, 8, 7);
+	loadModel("portal89", Type::Portal, 9, 8);
+	loadModel("portal9A", Type::Portal, 10, 9);
+	loadModel("portalA1", Type::Portal, 1, 10);
+
+	loadModel("room1", Type::Mesh, 1);
+	loadModel("room2", Type::Mesh, 2);
+	loadModel("room3", Type::Mesh, 3);
+	loadModel("room4", Type::Mesh, 4);
+	loadModel("room5", Type::Mesh, 5);
+	loadModel("room6", Type::Mesh, 6);
+	loadModel("room7", Type::Mesh, 7);
+	loadModel("room8", Type::Mesh, 8);
+	loadModel("room9", Type::Mesh, 9);
+	loadModel("roomA", Type::Mesh, 10);
 }
 
 GLuint createShader(std::string path, GLenum type)
@@ -486,7 +507,7 @@ void setupGraphics() {
 	glEnable(GL_STENCIL_TEST);
 	glClearStencil(0);
 
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClearColor(0.4f, 0.8f, 1.0f, 1.0f);
 
 	shaderFolder = "Shaders/";
 	GLuint vertexShader = createShader("vertex.vert", GL_VERTEX_SHADER);
@@ -588,7 +609,7 @@ void updateControls() {
 	state.checkPoint += state.timeDelta;
 
 	if (VR) {
-		ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
+		/*ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
 
 		if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
 		{
@@ -602,11 +623,11 @@ void updateControls() {
 
 			glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y });
 			camera.direction = rotation * forward;
-		}
+		}*/
 	}
 
 	else {
-		auto moveDelta = state.timeDelta * 6.0, turnDelta = glm::radians(0.1);
+		auto moveDelta = state.timeDelta * 24.0, turnDelta = glm::radians(0.1);
 		auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
 
 		if (vectorCount > 0)
@@ -651,6 +672,8 @@ void updateControls() {
 
 	controls.deltaX = 0.0f;
 	controls.deltaY = 0.0f;
+
+	std::cout << camera.room << std::endl;
 }
 
 bool visible(Portal& portal, Node& node) {

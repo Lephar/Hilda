@@ -14,9 +14,10 @@ void main()
 	vec3 lightDirection = normalize(lightPosition - inputPosition);
 	float intensity = max(dot(inputNormal, lightDirection), 0.0f);
 	
-	vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
+	vec3 lightColor = vec3(0.0f, 0.0f, 0.0f);
+	//vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
 	vec3 pointLight = intensity * lightColor;
-	vec3 ambientLight = vec3(0.2f, 0.2f, 0.2f);
+	vec3 ambientLight = vec3(0.8f, 0.8f, 0.8f);
 	
 	//outputColor = vec4(0.0f, 0.0f, 1.0f, 1.0f);
 	//outputColor = vec4(pointLight + ambientLight, 1.0f) * vec4((inputNormal + 1) / 2.0f, 1.0f);
