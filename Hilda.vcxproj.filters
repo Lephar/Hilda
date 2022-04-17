@@ -25,9 +25,6 @@
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include=".gitattributes" />
-    <None Include="shaders\vertex.vert" />
-    <None Include="shaders\fragment.frag" />
-    <None Include="shaders\compute.comp" />
     <None Include="assets\camera.bin">
       <Filter>Resource Files</Filter>
     </None>
@@ -64,64 +61,230 @@
     <None Include="assets\room6.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="shaders\screen.frag" />
-    <None Include="shaders\screen.vert" />
     <None Include="Assets\.gitmodules" />
-    <None Include="Assets\italy\Italy.gltf" />
-    <None Include="Assets\italy\Italy.blend" />
     <None Include="Assets\italy\Italy.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room6.gltf" />
     <None Include="Assets\backroom\room6.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room5.gltf" />
     <None Include="Assets\backroom\room5.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room4.gltf" />
     <None Include="Assets\backroom\room4.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room3.gltf" />
     <None Include="Assets\backroom\room3.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room2.gltf" />
     <None Include="Assets\backroom\room2.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\room1.gltf" />
     <None Include="Assets\backroom\room1.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\portal26.gltf" />
     <None Include="Assets\backroom\portal26.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\portal15.gltf" />
     <None Include="Assets\backroom\portal15.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\portal14.gltf" />
     <None Include="Assets\backroom\portal14.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\portal13.gltf" />
     <None Include="Assets\backroom\portal13.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\portal12.gltf" />
     <None Include="Assets\backroom\portal12.bin">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Assets\backroom\environment.blend" />
-    <None Include="Assets\backroom\camera.gltf" />
     <None Include="Assets\backroom\camera.bin">
       <Filter>Resource Files</Filter>
     </None>
     <None Include=".gitmodules" />
+    <None Include="Assets\italy\camera.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal9A.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal12.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal23.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal34.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal45.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal56.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal67.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal78.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal89.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portalA1.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room1.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room2.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room3.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room4.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room5.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room6.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room7.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room8.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room9.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\roomA.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\camera.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\camera.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\environment.blend">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="shaders\fragment.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\Italy.blend">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\Italy.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\sig16_mvp_mapping\scene\italy\italy.mtl">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\sig16_mvp_mapping\map\map.m">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal9A.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal12.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\portal12.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\portal13.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\portal14.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\portal15.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal23.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\portal26.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal34.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal45.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal56.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal67.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal78.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portal89.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\portalA1.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room1.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room1.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room2.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room2.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room3.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room3.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room4.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room4.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room5.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room5.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\backroom\room6.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room6.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room7.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room8.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\room9.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\italy\roomA.gltf">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="shaders\vertex.vert">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Hilda.hpp">
@@ -186,8 +349,12 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Library Include="libraries\glfw3.lib" />
-    <Library Include="Libraries\LibOVR.lib" />
+    <Library Include="Libraries\LibOVR.lib">
+      <Filter>Resource Files</Filter>
+    </Library>
+    <Library Include="libraries\glfw3.lib">
+      <Filter>Resource Files</Filter>
+    </Library>
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\italy\cs_italy_texture_79.jpg">
@@ -499,5 +666,298 @@
     <Image Include="Assets\backroom\brick1.jpg">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="Assets\sig16_mvp_mapping\map\italy\floor_plan_600x600.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_0.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_1.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_2.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_3.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_4.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_5.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_6.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_7.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_8.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_9.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_10.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_11.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_12.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_13.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_14.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_15.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_16.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_17.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_18.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_19.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_20.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_21.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_22.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_23.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_24.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_25.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_26.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_27.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_28.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_29.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_30.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_31.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_32.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_33.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_34.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_35.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_36.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_37.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_38.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_39.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_40.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_41.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_42.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_43.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_44.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_45.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_46.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_47.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_48.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_49.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_50.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_51.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_52.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_53.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_54.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_55.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_56.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_57.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_58.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_59.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_60.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_61.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_62.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_63.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_64.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_65.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_66.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_67.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_68.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_69.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_70.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_71.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_72.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_73.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_74.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_75.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_76.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_77.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_78.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_79.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_80.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_81.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_82.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_83.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_84.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_85.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\cs_italy_texture_86.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\sig16_mvp_mapping\scene\italy\Amadeus\solid_skyblue.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\b_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\b_70x70.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\c_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\c_70x70.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\central_obs_b_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\central_obs_c_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\side_obs_b_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="Assets\sig16_mvp_mapping\map\italy\side_obs_c_60x120.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
   </ItemGroup>
 </Project>

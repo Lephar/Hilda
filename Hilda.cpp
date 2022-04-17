@@ -942,9 +942,6 @@ void draw() {
 
 		glfwSwapBuffers(window);
 
-		if (state.frameCount == 5)
-			exit(0);
-
 		//std::this_thread::sleep_until(state.currentTime + std::chrono::milliseconds(1));
 	}
 }
