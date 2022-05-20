@@ -258,7 +258,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 	}
 }
 
-void loadModel(const std::string name, Type type, uint8_t sourceRoom = 0, uint8_t targetRoom = 0) {
+void loadModel(Type type, const std::string name, uint8_t room) {
 	std::string error, warning;
 	tinygltf::Model model;
 
@@ -274,7 +274,7 @@ void loadModel(const std::string name, Type type, uint8_t sourceRoom = 0, uint8_
 #endif
 
 	if (type == Type::Camera) {
-		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), sourceRoom);
+		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), room);
 
 		origin = camera.position;
 		forward = glm::vec4{ camera.direction, 0.0f };
@@ -293,16 +293,16 @@ void loadModel(const std::string name, Type type, uint8_t sourceRoom = 0, uint8_
 
 		for (auto& node : model.nodes) {
 			auto& mesh = model.meshes.at(node.mesh);
-			loadMesh(model, mesh, type, getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), sourceRoom);
+			loadMesh(model, mesh, type, getNodeTranslation(node), getNodeRotation(node), getNodeScale(node), room);
 		}
 
-		if (type == Type::Portal) {
+		if (type == Type::Portal && portals.size() % 2 == 0) {
 			auto& bluePortal = portals.at(portals.size() - 2);
 			auto& orangePortal = portals.at(portals.size() - 1);
 			auto portalRotation = glm::rotate(glm::radians(180.0f), glm::vec3{ 0.0f, 0.0f, 1.0f });
 
-			bluePortal.targetRoom = orangePortal.mesh.room = targetRoom;
-			orangePortal.targetRoom = bluePortal.mesh.room = sourceRoom;
+			bluePortal.targetRoom = orangePortal.mesh.room;
+			orangePortal.targetRoom = bluePortal.mesh.room;
 
 			bluePortal.cameraTransform = orangePortal.mesh.transform * portalRotation * glm::inverse(bluePortal.mesh.transform);
 			orangePortal.cameraTransform = bluePortal.mesh.transform * portalRotation * glm::inverse(orangePortal.mesh.transform);
@@ -333,29 +333,39 @@ void createScene() {
 	// TODO: Fix portal association
 	assetFolder = "Assets/italy/";
 
-	loadModel("camera", Type::Camera, 2);
+	loadModel(Type::Camera, "camera", 2);
 
-	loadModel("portal12", Type::Portal, 2, 1);
-	loadModel("portal23", Type::Portal, 3, 2);
-	loadModel("portal34", Type::Portal, 4, 3);
-	loadModel("portal45", Type::Portal, 5, 4);
-	loadModel("portal56", Type::Portal, 6, 5);
-	loadModel("portal67", Type::Portal, 7, 6);
-	loadModel("portal78", Type::Portal, 8, 7);
-	loadModel("portal89", Type::Portal, 9, 8);
-	loadModel("portal9A", Type::Portal, 10, 9);
-	loadModel("portalA1", Type::Portal, 1, 10);
+	loadModel(Type::Portal, "portal12", 1);
+	loadModel(Type::Portal, "portal21", 2);
+	loadModel(Type::Portal, "portal23", 2);
+	loadModel(Type::Portal, "portal32", 3);
+	loadModel(Type::Portal, "portal34", 3);
+	loadModel(Type::Portal, "portal43", 4);
+	loadModel(Type::Portal, "portal45", 4);
+	loadModel(Type::Portal, "portal54", 5);
+	loadModel(Type::Portal, "portal56", 5);
+	loadModel(Type::Portal, "portal65", 6);
+	loadModel(Type::Portal, "portal67", 6);
+	loadModel(Type::Portal, "portal76", 7);
+	loadModel(Type::Portal, "portal78", 7);
+	loadModel(Type::Portal, "portal87", 8);
+	loadModel(Type::Portal, "portal89", 8);
+	loadModel(Type::Portal, "portal98", 9);
+	loadModel(Type::Portal, "portal9A", 9);
+	loadModel(Type::Portal, "portalA9", 10);
+	loadModel(Type::Portal, "portalA1", 10);
+	loadModel(Type::Portal, "portal1A", 1);
 
-	loadModel("room1", Type::Mesh, 1);
-	loadModel("room2", Type::Mesh, 2);
-	loadModel("room3", Type::Mesh, 3);
-	loadModel("room4", Type::Mesh, 4);
-	loadModel("room5", Type::Mesh, 5);
-	loadModel("room6", Type::Mesh, 6);
-	loadModel("room7", Type::Mesh, 7);
-	loadModel("room8", Type::Mesh, 8);
-	loadModel("room9", Type::Mesh, 9);
-	loadModel("roomA", Type::Mesh, 10);
+	loadModel(Type::Mesh, "room1", 1);
+	loadModel(Type::Mesh, "room2", 2);
+	loadModel(Type::Mesh, "room3", 3);
+	loadModel(Type::Mesh, "room4", 4);
+	loadModel(Type::Mesh, "room5", 5);
+	loadModel(Type::Mesh, "room6", 6);
+	loadModel(Type::Mesh, "room7", 7);
+	loadModel(Type::Mesh, "room8", 8);
+	loadModel(Type::Mesh, "room9", 9);
+	loadModel(Type::Mesh, "roomA", 10);
 }
 
 GLuint createShader(std::string path, GLenum type)
@@ -472,9 +482,11 @@ GLuint createFramebufferColorTexture(uint32_t width, uint32_t height) {
 	glBindTexture(GL_TEXTURE_2D, colorTexture);
 	
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-	
+
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	return colorTexture;
 }
@@ -489,7 +501,15 @@ GLuint createFramebuffer(GLuint renderBuffer, GLuint colorTexture) {
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBuffer);
 
 	glBindTexture(GL_TEXTURE_2D, colorTexture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
+
+	glEnable(GL_FRAMEBUFFER_SRGB);
 
 	return framebuffer;
 }
