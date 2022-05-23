@@ -38,6 +38,7 @@
 
 #include <LibOVR/OVR_CAPI.h>
 #include <LibOVR/OVR_CAPI_GL.h>
+#include <LibOVR/Extras/OVR_Math.h>
 
 constexpr auto epsilon = 0.0009765625f;
 
@@ -47,53 +48,18 @@ enum class Type {
 	Camera
 };
 
-struct Controls {
-	bool keyW;
-	bool keyA;
-	bool keyS;
-	bool keyD;
-
-	double_t mouseX;
-	double_t mouseY;
-	double_t deltaX;
-	double_t deltaY;
-};
-
-struct Details {
-	uint32_t windowWidth;
-	uint32_t windowHeight;
-	uint32_t headsetWidth;
-	uint32_t headsetHeight;
-	int32_t headsetImageCount;
-	uint32_t portalCount;
-	uint32_t meshCount;
-	uint32_t maxCameraCount;
-};
-
-struct State {
-	uint32_t currentImage;
-	uint32_t frameCount;
-	uint32_t totalFrameCount;
-	double_t timeDelta;
-	double_t checkPoint;
-	std::chrono::time_point<std::chrono::high_resolution_clock> previousTime;
-	std::chrono::time_point<std::chrono::high_resolution_clock> currentTime;
+struct Framebuffer {
+	uint32_t width;
+	uint32_t height;
+	GLuint framebuffer;
+	ovrTextureSwapChain depthStencilSwapchain;
+	ovrTextureSwapChain textureSwapchain;
 };
 
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 texture;
-};
-
-struct Camera {
-	uint32_t room;
-
-	glm::vec3 position;
-	glm::vec3 direction;
-	glm::vec3 up;
-
-	glm::vec3 previous;
 };
 
 struct Image {
@@ -126,7 +92,7 @@ struct Portal {
 	uint8_t targetRoom;
 
 	glm::vec3 direction;
-	glm::mat4 cameraTransform;
+	glm::vec3 translation;
 };
 
 struct Node {
@@ -134,6 +100,6 @@ struct Node {
 	int32_t parentIndex;
 	int32_t portalIndex;
 
-	Camera camera;
-	glm::mat4 transform;
+	uint8_t room;
+	glm::vec3 translation;
 };

@@ -16,16 +16,42 @@ ovrTextureSwapChain swapchain;
 ovrEyeRenderDesc eyeRenderDesc[2];
 ovrPosef hmdToEyeViewPose[2];
 ovrLayerEyeFov layer;
-std::unordered_map<int, GLuint> framebuffers;
 
-Controls controls;
-Details details;
-State state;
-Camera camera;
+Framebuffer framebuffers[2];
 
-glm::vec3 origin;
-glm::vec4 forward;
-glm::mat4 projection;
+ovrMirrorTexture mirrorTexture;
+GLuint mirrorTextureBuffer;
+GLuint mirrorFramebuffer;
+
+bool keyW;
+bool keyA;
+bool keyS;
+bool keyD;
+
+double_t mouseX;
+double_t mouseY;
+double_t deltaX;
+double_t deltaY;
+
+uint32_t width;
+uint32_t height;
+int32_t headsetImageCount;
+uint32_t portalCount;
+uint32_t meshCount;
+uint32_t maxCameraCount;
+
+uint32_t currentImage;
+uint32_t frameCount;
+uint32_t totalFrameCount;
+double_t timeDelta;
+double_t checkPoint;
+
+std::chrono::time_point<std::chrono::high_resolution_clock> previousTime;
+std::chrono::time_point<std::chrono::high_resolution_clock> currentTime;
+
+glm::vec3 previousPosition;
+glm::vec3 currentPosition;
+uint8_t currentRoom;
 
 std::vector<GLushort> indices;
 std::vector<Vertex> vertices;
@@ -41,6 +67,8 @@ GLuint VBO;
 GLuint EBO;
 GLuint UBO;
 GLuint shaderProgram;
+
+//////////////////////////////////////////////////////////////////////////////
 
 std::ostream& operator<<(std::ostream& os, glm::vec2& vector) {
 	return os << vector.x << " " << vector.y << std::endl;
@@ -58,13 +86,15 @@ std::ostream& operator<<(std::ostream& os, Node& node) {
 	return os << node.layer << " " << node.parentIndex << " " << node.portalIndex << std::endl;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+
 void mouseCallback(GLFWwindow* handle, double x, double y) {
 	static_cast<void>(handle);
 
-	controls.deltaX += controls.mouseX - x;
-	controls.deltaY += controls.mouseY - y;
-	controls.mouseX = x;
-	controls.mouseY = y;
+	deltaX += mouseX - x;
+	deltaY += mouseY - y;
+	mouseX = x;
+	mouseY = y;
 }
 
 void keyboardCallback(GLFWwindow* handle, int key, int scancode, int action, int mods) {
@@ -73,23 +103,23 @@ void keyboardCallback(GLFWwindow* handle, int key, int scancode, int action, int
 
 	if (action == GLFW_RELEASE) {
 		if (key == GLFW_KEY_W)
-			controls.keyW = false;
+			keyW = false;
 		else if (key == GLFW_KEY_S)
-			controls.keyS = false;
+			keyS = false;
 		else if (key == GLFW_KEY_A)
-			controls.keyA = false;
+			keyA = false;
 		else if (key == GLFW_KEY_D)
-			controls.keyD = false;
+			keyD = false;
 	}
 	else if (action == GLFW_PRESS) {
 		if (key == GLFW_KEY_W)
-			controls.keyW = true;
+			keyW = true;
 		else if (key == GLFW_KEY_S)
-			controls.keyS = true;
+			keyS = true;
 		else if (key == GLFW_KEY_A)
-			controls.keyA = true;
+			keyA = true;
 		else if (key == GLFW_KEY_D)
-			controls.keyD = true;
+			keyD = true;
 		else if (key == GLFW_KEY_ESCAPE)
 			glfwSetWindowShouldClose(handle, 1);
 	}
@@ -99,8 +129,10 @@ void resizeEvent(GLFWwindow* handle, int width, int height) {
 	static_cast<void>(width);
 	static_cast<void>(height);
 
-	glfwSetWindowSize(handle, details.windowWidth, details.windowHeight);
+	glfwSetWindowSize(handle, width, height);
 }
+
+//////////////////////////////////////////////////////////////////////////////
 
 glm::mat4 getNodeTranslation(const tinygltf::Node& node) {
 	glm::mat4 translation{ 1.0f };
@@ -131,14 +163,6 @@ glm::mat4 getNodeScale(const tinygltf::Node& node) {
 
 glm::mat4 getNodeTransformation(const tinygltf::Node& node) {
 	return getNodeTranslation(node) * getNodeRotation(node) * getNodeScale(node);
-}
-
-void createCameraFromMatrix(Camera& camera, const glm::mat4& transformation, uint32_t room) {
-	camera.room = room;
-	camera.position = transformation * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
-	camera.direction = transformation * glm::vec4{ 0.0f, -1.0f, 0.0f, 0.0f };
-	camera.up = transformation * glm::vec4{ 0.0f, 0.0f, 1.0f, 0.0f };
-	camera.previous = camera.position;
 }
 
 void loadTexture(std::string name) {
@@ -242,7 +266,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 		mesh.maxBorders = max;
 
 		if (type == Type::Mesh) {
-			details.meshCount++;
+			meshCount++;
 			meshes.push_back(mesh);
 		}
 
@@ -252,7 +276,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 			portal.mesh = mesh;
 			portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
 
-			details.portalCount++;
+			portalCount++;
 			portals.push_back(portal);
 		}
 	}
@@ -274,13 +298,9 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 #endif
 
 	if (type == Type::Camera) {
-		createCameraFromMatrix(camera, getNodeTransformation(model.nodes.front()), room);
-
-		origin = camera.position;
-		forward = glm::vec4{ camera.direction, 0.0f };
-
-		projection = glm::perspective(glm::radians(45.0f),
-			static_cast<float_t>(details.windowWidth) / static_cast<float_t>(details.windowHeight), 0.01f, 1000.0f);
+		auto& node = model.nodes.front();
+		currentRoom = room;
+		currentPosition = getNodeTranslation(node) * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
 	}
 
 	else {
@@ -299,13 +319,12 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 		if (type == Type::Portal && portals.size() % 2 == 0) {
 			auto& bluePortal = portals.at(portals.size() - 2);
 			auto& orangePortal = portals.at(portals.size() - 1);
-			auto portalRotation = glm::rotate(glm::radians(180.0f), glm::vec3{ 0.0f, 0.0f, 1.0f });
 
 			bluePortal.targetRoom = orangePortal.mesh.room;
 			orangePortal.targetRoom = bluePortal.mesh.room;
 
-			bluePortal.cameraTransform = orangePortal.mesh.transform * portalRotation * glm::inverse(bluePortal.mesh.transform);
-			orangePortal.cameraTransform = bluePortal.mesh.transform * portalRotation * glm::inverse(orangePortal.mesh.transform);
+			bluePortal.translation = orangePortal.mesh.origin - bluePortal.mesh.origin;
+			orangePortal.translation = bluePortal.mesh.origin - orangePortal.mesh.origin;
 		}
 	}
 }
@@ -368,6 +387,8 @@ void createScene() {
 	loadModel(Type::Mesh, "roomA", 10);
 }
 
+//////////////////////////////////////////////////////////////////////////////
+
 GLuint createShader(std::string path, GLenum type)
 {
 	std::ifstream file;
@@ -420,28 +441,28 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 	return program;
 }
 
-void initializeStates() {
-	details.windowWidth = 800;
-	details.windowHeight = 600;
-	details.maxCameraCount = 15;	// 2 ^ 4 - 1 - 1
-
-	controls.keyW = false;
-	controls.keyA = false;
-	controls.keyS = false;
-	controls.keyD = false;
-	controls.deltaX = 0.0f;
-	controls.deltaY = 0.0f;
-
-	state.currentImage = 0;
-	state.frameCount = 0;
-	state.totalFrameCount = 0;
-	state.checkPoint = 0.0f;
-	state.currentTime = std::chrono::high_resolution_clock::now();
-}
-
-void initializeContext() {
+void setup() {
 	ovr_Initialize(nullptr);
 	VR = OVR_SUCCESS(ovr_Create(&session, &luid));
+
+	hmdDesc = ovr_GetHmdDesc(session);
+
+	width = hmdDesc.Resolution.w / 2;
+	height = hmdDesc.Resolution.h / 2;
+	
+	maxCameraCount = 15;	// 2 ^ 4 - 1 - 1
+	
+	keyW = false;
+	keyA = false;
+	keyS = false;
+	keyD = false;
+	deltaX = 0.0f;
+	deltaY = 0.0f;
+
+	currentImage = 0;
+	frameCount = 0;
+	totalFrameCount = 0;
+	checkPoint = 0.0f;
 
 	glfwInit();
 
@@ -449,72 +470,23 @@ void initializeContext() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
+	//glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, 1);
 
-	window = glfwCreateWindow(details.windowWidth, details.windowHeight, "", nullptr, nullptr);
+	window = glfwCreateWindow(width, height, "", nullptr, nullptr);
 
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, keyboardCallback);
 	glfwSetCursorPosCallback(window, mouseCallback);
 	glfwSetFramebufferSizeCallback(window, resizeEvent);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	glfwGetCursorPos(window, &controls.mouseX, &controls.mouseY);
+	glfwGetCursorPos(window, &mouseX, &mouseY);
+
 	glfwSwapInterval(0);
 
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-}
 
-GLuint createFramebufferRenderBuffer(uint32_t width, uint32_t height) {
-	GLuint renderBuffer;
+	createScene();
 
-	glGenRenderbuffers(1, &renderBuffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
-
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH32F_STENCIL8, width, height);
-
-	return renderBuffer;
-}
-
-GLuint createFramebufferColorTexture(uint32_t width, uint32_t height) {
-	GLuint colorTexture;
-
-	glGenTextures(1, &colorTexture);
-	glBindTexture(GL_TEXTURE_2D, colorTexture);
-	
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	return colorTexture;
-}
-
-GLuint createFramebuffer(GLuint renderBuffer, GLuint colorTexture) {
-	GLuint framebuffer;
-
-	glGenFramebuffers(1, &framebuffer);
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-	glBindRenderbuffer(GL_RENDERBUFFER, renderBuffer);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBuffer);
-
-	glBindTexture(GL_TEXTURE_2D, colorTexture);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-
-	glEnable(GL_FRAMEBUFFER_SRGB);
-
-	return framebuffer;
-}
-
-void setupGraphics() {
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
@@ -529,6 +501,78 @@ void setupGraphics() {
 
 	glClearColor(0.4f, 0.8f, 1.0f, 1.0f);
 
+	for (int eye = 0; eye < 2; eye++) {
+		auto& framebuffer = framebuffers[eye];
+
+		ovrSizei idealTextureSize = ovr_GetFovTextureSize(session, ovrEyeType(eye), hmdDesc.DefaultEyeFov[eye], 1);
+			
+		framebuffer.width = idealTextureSize.w;
+		framebuffer.height = idealTextureSize.h;
+
+		ovrTextureSwapChainDesc desc = {};
+		desc.Type = ovrTexture_2D;
+		desc.ArraySize = 1;
+		desc.Width = framebuffer.width;
+		desc.Height = framebuffer.height;
+		desc.MipLevels = 1;
+		desc.SampleCount = 1;
+		desc.StaticImage = ovrFalse;
+
+		int length;
+
+		desc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
+
+		ovr_CreateTextureSwapChainGL(session, &desc, &framebuffer.textureSwapchain);
+		ovr_GetTextureSwapChainLength(session, framebuffer.textureSwapchain, &length);
+
+		for (int i = 0; i < length; i++)
+		{
+			GLuint textureIndex;
+			ovr_GetTextureSwapChainBufferGL(session, framebuffer.textureSwapchain, i, &textureIndex);
+			glBindTexture(GL_TEXTURE_2D, textureIndex);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
+
+		desc.Format = OVR_FORMAT_D32_FLOAT_S8X24_UINT;
+
+		ovr_CreateTextureSwapChainGL(session, &desc, &framebuffer.depthStencilSwapchain);
+		ovr_GetTextureSwapChainLength(session, framebuffer.depthStencilSwapchain, &length);
+
+		for (int i = 0; i < length; ++i)
+		{
+			GLuint textureIndex;
+			ovr_GetTextureSwapChainBufferGL(session, framebuffer.depthStencilSwapchain, i, &textureIndex);
+			glBindTexture(GL_TEXTURE_2D, textureIndex);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		}
+
+		glGenFramebuffers(1, &framebuffer.framebuffer);
+	}
+
+	ovrMirrorTextureDesc mirrorDescriptor{};
+	mirrorDescriptor.Width = width;
+	mirrorDescriptor.Height = width;
+	mirrorDescriptor.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
+
+	ovr_CreateMirrorTextureWithOptionsGL(session, &mirrorDescriptor, &mirrorTexture);
+	ovr_GetMirrorTextureBufferGL(session, mirrorTexture, &mirrorTextureBuffer);
+
+	glGenFramebuffers(1, &mirrorFramebuffer);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, mirrorFramebuffer);
+	glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mirrorTextureBuffer, 0);
+	glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+	ovr_SetTrackingOriginType(session, ovrTrackingOrigin_FloorLevel);
+
 	shaderFolder = "Shaders/";
 	GLuint vertexShader = createShader("vertex.vert", GL_VERTEX_SHADER);
 	GLuint fragmentShader = createShader("fragment.frag", GL_FRAGMENT_SHADER);
@@ -539,58 +583,7 @@ void setupGraphics() {
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
 	glUseProgram(shaderProgram);
-
-	if(VR) {
-		hmdDesc = ovr_GetHmdDesc(session);
-
-		ovrSizei leftEyeSize = ovr_GetFovTextureSize(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0], 1.0f);
-		ovrSizei rightEyeSize = ovr_GetFovTextureSize(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1], 1.0f);
-
-		details.headsetWidth = leftEyeSize.w + rightEyeSize.w;
-		details.headsetHeight = std::max(leftEyeSize.h, rightEyeSize.h);
-
-		ovrTextureSwapChainDesc swapchainDesc{};
-		swapchainDesc.Type = ovrTexture_2D;
-		swapchainDesc.ArraySize = 1;
-		swapchainDesc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
-		swapchainDesc.Width = details.headsetWidth;
-		swapchainDesc.Height = details.headsetHeight;
-		swapchainDesc.MipLevels = 1;
-		swapchainDesc.SampleCount = 1;
-		swapchainDesc.StaticImage = ovrFalse;
-
-		ovr_CreateTextureSwapChainGL(session, &swapchainDesc, &swapchain);
-		ovr_GetTextureSwapChainLength(session, swapchain, &details.headsetImageCount);
-
-		for (int imageIndex = 0; imageIndex < details.headsetImageCount; imageIndex++) {
-			GLuint swapchainColorTexture;
-			ovr_GetTextureSwapChainBufferGL(session, swapchain, imageIndex, &swapchainColorTexture);
-
-			GLuint swapchainRenderBuffer = createFramebufferRenderBuffer(details.headsetWidth, details.headsetHeight);
-			GLuint swapchainFramebuffer = createFramebuffer(swapchainRenderBuffer, swapchainColorTexture);
-
-			framebuffers.emplace(imageIndex, swapchainFramebuffer);
-		}
-		
-		eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
-		eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
-		hmdToEyeViewPose[0] = eyeRenderDesc[0].HmdToEyePose;
-		hmdToEyeViewPose[1] = eyeRenderDesc[1].HmdToEyePose;
-
-		layer.Header.Type = ovrLayerType_EyeFov;
-		layer.Header.Flags = 0;
-		layer.ColorTexture[0] = swapchain;
-		layer.ColorTexture[1] = swapchain;
-		layer.Fov[0] = eyeRenderDesc[0].Fov;
-		layer.Fov[1] = eyeRenderDesc[1].Fov;
-		layer.Viewport[0] = ovrRecti(ovrVector2i(0, 0), ovrSizei(details.headsetWidth / 2, details.headsetHeight));
-		layer.Viewport[1] = ovrRecti(ovrVector2i(details.headsetWidth / 2, 0), ovrSizei(details.headsetWidth / 2, details.headsetHeight));
-	}
-
-	GLuint renderBuffer = createFramebufferRenderBuffer(details.windowWidth, details.windowHeight);
-	GLuint colorTexture = createFramebufferColorTexture(details.windowWidth, details.windowHeight);
-	FBO = createFramebuffer(renderBuffer, colorTexture);
-
+	
 	glGenVertexArrays(1, &VAO);
 	glBindVertexArray(VAO);
 
@@ -615,169 +608,13 @@ void setupGraphics() {
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, UBO);
 }
 
-void setup() {
-	initializeStates();
-	initializeContext();
-	createScene();
-	setupGraphics();
-}
-
-void updateControls() {
-	state.previousTime = state.currentTime;
-	state.currentTime = std::chrono::high_resolution_clock::now();
-	state.timeDelta = std::chrono::duration<double_t, std::chrono::seconds::period>(state.currentTime - state.previousTime).count();
-	state.checkPoint += state.timeDelta;
-
-	if (VR) {
-		/*ovrTrackingState ts = ovr_GetTrackingState(session, ovr_GetTimeInSeconds(), ovrTrue);
-
-		if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked))
-		{
-			ovrPosef pose = ts.HeadPose.ThePose;
-
-			//std::cout << pose.Position.x << " " << pose.Position.y << " " << pose.Position.z << std::endl;
-			//std::cout << pose.Orientation.w << " " << pose.Orientation.x << " " << pose.Orientation.y << " " << pose.Orientation.z << std::endl << std::endl;
-
-			camera.previous = camera.position;
-			camera.position = origin + glm::vec3{ -pose.Position.z + 0.5f, -pose.Position.x + 0.5f, pose.Position.y + 0.5f } *10.0f;
-
-			glm::mat4 rotation = glm::toMat4(glm::qua{ pose.Orientation.w, pose.Orientation.z, -pose.Orientation.x, pose.Orientation.y });
-			camera.direction = rotation * forward;
-		}*/
-	}
-
-	else {
-		auto moveDelta = state.timeDelta * 24.0, turnDelta = glm::radians(0.1);
-		auto vectorCount = std::abs(controls.keyW - controls.keyS) + std::abs(controls.keyD - controls.keyA);
-
-		if (vectorCount > 0)
-			moveDelta /= std::sqrt(vectorCount);
-
-		auto right = glm::normalize(glm::cross(camera.direction, camera.up));
-
-		camera.direction = glm::normalize(glm::vec3{ glm::rotate<float_t>(turnDelta * controls.deltaY, right) *
-															glm::rotate<float_t>(turnDelta * controls.deltaX, camera.up) *
-															glm::vec4{camera.direction, 0.0f} });
-
-		right = glm::normalize(glm::cross(camera.up, camera.direction));
-
-		camera.previous = camera.position;
-		camera.position += static_cast<float_t>(moveDelta * (controls.keyW - controls.keyS)) * camera.direction +
-		static_cast<float_t>(moveDelta * (controls.keyA - controls.keyD)) * right;
-	}
-
-	auto replacement = camera.position - camera.previous;
-	auto direction = glm::normalize(replacement);
-	auto coefficient = 0.0f, distance = glm::length(replacement);
-
-	for (auto& portal : portals) {
-		if (epsilon < distance && glm::intersectRayPlane(camera.previous, direction, portal.mesh.origin, portal.direction, coefficient)) {
-			auto point = camera.previous + coefficient * direction;
-
-			if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
-				point.x <= portal.mesh.maxBorders.x && point.y <= portal.mesh.maxBorders.y && point.z <= portal.mesh.maxBorders.z &&
-				0 <= coefficient && distance >= coefficient) {
-				camera.room = portal.targetRoom;
-
-				camera.position = portal.cameraTransform * glm::vec4{ camera.position, 1.0f };
-				camera.direction = portal.cameraTransform * glm::vec4{ camera.direction, 0.0f };
-				camera.up = portal.cameraTransform * glm::vec4{ camera.up, 0.0f };
-
-				camera.previous = camera.position;
-
-				break;
-			}
-		}
-	}
-
-	controls.deltaX = 0.0f;
-	controls.deltaY = 0.0f;
-
-	std::cout << camera.room << std::endl;
-}
+//////////////////////////////////////////////////////////////////////////////
 
 bool visible(Portal& portal, Node& node) {
-	if (portal.mesh.room == node.camera.room && portal.pairIndex != node.portalIndex)
+	if (node.room == portal.mesh.room && portal.pairIndex != node.portalIndex)
 		return true;
 	else
 		return false;
-}
-
-float sign(float value)
-{
-	if (value > 0.0f)
-		return 1.0f;
-	if (value < 0.0f)
-		return -1.0f;
-	return 0.0f;
-}
-
-glm::mat4 cullOblique(Portal& portal) {
-	auto portalProjection = projection;
-	auto plane = glm::vec4{ portal.direction, glm::dot(portal.direction, portal.mesh.origin) };
-
-	glm::vec4 quaternion{};
-	quaternion.x = (sign(plane.x) + portalProjection[2][0]) / portalProjection[0][0];
-	quaternion.y = (sign(plane.y) + portalProjection[2][1]) / portalProjection[1][1];
-	quaternion.z = -1.0f;
-	quaternion.w = (1.0f + portalProjection[2][2]) / portalProjection[3][2];
-
-	glm::vec4 clip = plane * (2.0f / glm::dot(plane, quaternion));
-
-	portalProjection[0][2] = clip.x;
-	portalProjection[1][2] = clip.y;
-	portalProjection[2][2] = clip.z + 1.0F;
-	portalProjection[3][2] = clip.w;
-
-	return portalProjection;
-}
-
-void generateNodes() {
-	nodes.clear();
-
-	std::queue<Node> queue;
-
-	auto transform = projection * glm::lookAt(camera.position, camera.position + camera.direction, camera.up);
-
-	Node mainNode{ 0, -1, -1, camera, transform };
-
-	queue.push(mainNode);
-	nodes.push_back(mainNode);
-
-	while (nodes.size() != details.maxCameraCount && !queue.empty()) {
-		int32_t parentIndex = nodes.size() - queue.size();
-
-		auto parentNode = queue.front();
-		queue.pop();
-
-		for (int32_t i = 0; i < portals.size(); i++) {
-			auto& portal = portals.at(i);
-
-			if (visible(portal, parentNode)) {
-				Camera portalCamera {
-					portal.targetRoom,
-					portal.cameraTransform * glm::vec4{ parentNode.camera.position, 1.0f },
-					portal.cameraTransform * glm::vec4{ parentNode.camera.direction, 0.0f },
-					parentNode.camera.up,
-					parentNode.camera.previous
-				};
-
-				auto portalProjection = projection;
-				//auto portalProjection = cullOblique(portal);
-
-				auto portalTransform = portalProjection * glm::lookAt(portalCamera.position,
-					portalCamera.position + portalCamera.direction, portalCamera.up);
-
-				Node portalNode{ parentNode.layer + 1, parentIndex, i, portalCamera, portalTransform };
-
-				queue.push(portalNode);
-				nodes.push_back(portalNode);
-
-				if (nodes.size() == details.maxCameraCount)
-					break;
-			}
-		}
-	}
 }
 
 void drawMesh(Mesh& mesh) {
@@ -789,7 +626,6 @@ void drawNodeView(uint8_t nodeIndex) {
 	auto& node = nodes.at(nodeIndex);
 	uint8_t mod = node.layer % 2;
 
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), &node.transform, GL_DYNAMIC_DRAW);
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
@@ -836,111 +672,218 @@ void drawNodeView(uint8_t nodeIndex) {
 	}
 }
 
-void drawViewport(GLint x, GLint y, GLint w, GLint h) {
-	glStencilMask(0xFF);
-	glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	glViewport(x, y, w, h);
-
-	for (uint8_t index = 0; index < nodes.size(); index++)
-		drawNodeView(index);
-}
-
-void drawScene() {
-	if (VR) {
-		/*
-		double displayMidpointSeconds = ovr_GetPredictedDisplayTime(session, 0);
-		ovrTrackingState hmdState = ovr_GetTrackingState(session, displayMidpointSeconds, ovrTrue);
-		ovr_CalcEyePoses(hmdState.HeadPose.ThePose, hmdToEyeViewPose, layer.RenderPose);
-		*/
-		ovrResult result;
-
-		int imageIndex = -1;
-		ovr_GetTextureSwapChainCurrentIndex(session, swapchain, &imageIndex);
-		std::cout << "GetTextureSwapChainCurrentIndex: " << imageIndex << std::endl;
-		
-		result = ovr_WaitToBeginFrame(session, state.frameCount);
-		std::cout << "WaitToBeginFrame: " << result << std::endl;
-
-		auto& framebuffer = framebuffers.at(imageIndex);
-		std::cout << "Framebuffer: " << framebuffer << std::endl;
-
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-		glStencilMask(0xFF);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-		result = ovr_BeginFrame(session, state.frameCount);
-		std::cout << "BeginFrame: " << result << std::endl;
-		/*
-		for (int eye = 0; eye < 2; eye++) {
-			Vector3f pos = originPos + originRot.Transform(layer.RenderPose[eye].Position);
-			Matrix4f rot = originRot * Matrix4f(layer.RenderPose[eye].Orientation);
-
-			Vector3f finalUp = rot.Transform(Vector3f(0, 1, 0));
-			Vector3f finalForward = rot.Transform(Vector3f(0, 0, -1));
-			Matrix4f view = Matrix4f::LookAtRH(pos, pos + finalForward, finalUp);
-
-			Matrix4f proj = ovrMatrix4f_Projection(layer.Fov[eye], 0.2f, 1000.0f, 0);
-		}
-		*/
-
-		drawViewport(layer.Viewport[0].Pos.x, layer.Viewport[0].Pos.y, layer.Viewport[0].Size.w, layer.Viewport[0].Size.h);
-		drawViewport(layer.Viewport[1].Pos.x, layer.Viewport[1].Pos.y, layer.Viewport[1].Size.w, layer.Viewport[1].Size.h);
-
-		ovr_CommitTextureSwapChain(session, swapchain);
-
-		ovrLayerHeader* layers = &layer.Header;
-		result = ovr_EndFrame(session, state.frameCount, nullptr, &layers, 1);
-		std::cout << "EndFrame: " << result << std::endl << std::endl;
-	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-	drawViewport(0, 0, details.windowWidth, details.windowHeight);
-
-	state.frameCount++;
-}
-
-void storePixels() {
-	if (state.totalFrameCount < 1000)
-		return;
-
-	int depth = 3;
-	int size = details.windowWidth * details.windowHeight * depth;
-	uint8_t* pixels = static_cast<uint8_t*>(calloc(size, 1));
-
-	glReadPixels(0, 0, details.windowWidth, details.windowHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-
-	std::ofstream file("image.ppm");
-	file << "P3\n" << details.windowWidth << " " << details.windowHeight << "\n255\n";
-
-	for (int i = 0; i < size; i++) {
-		file << (uint32_t)pixels[i] << " ";
-
-		if(i % depth == depth - 1)
-			file << "\n";
-	}
-
-	exit(0);
-}
-
 void updateFeedbacks() {
-	if (state.checkPoint > 1.0) {
-		state.totalFrameCount += state.frameCount;
-		auto title = std::to_string(state.frameCount) + " - " + std::to_string(state.totalFrameCount);
+	if (checkPoint > 1.0) {
+		totalFrameCount += frameCount;
+		auto title = std::to_string(frameCount) + " - " + std::to_string(totalFrameCount);
 
-		state.frameCount = 0;
-		state.checkPoint = 0.0;
+		frameCount = 0;
+		checkPoint = 0.0;
 		glfwSetWindowTitle(window, title.c_str());
 	}
 }
 
 void draw() {
+	float Yaw(3.141592f);
+	OVR::Vector3f Pos2(currentPosition.x, currentPosition.y, currentPosition.z);
+	
 	while (true) {
 		glfwPollEvents();
 
 		if (glfwWindowShouldClose(window))
 			break;
+		
+		ovrSessionStatus sessionStatus;
+		ovr_GetSessionStatus(session, &sessionStatus);
 
+		if (sessionStatus.ShouldQuit)
+			break;
+
+		if (sessionStatus.ShouldRecenter)
+			ovr_RecenterTrackingOrigin(session);
+		
+		if (sessionStatus.IsVisible)
+		{
+			ovrEyeRenderDesc eyeRenderDesc[2];
+			eyeRenderDesc[0] = ovr_GetRenderDesc(session, ovrEye_Left, hmdDesc.DefaultEyeFov[0]);
+			eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
+
+			ovrPosef EyeRenderPose[2];
+			ovrPosef HmdToEyePose[2] = { eyeRenderDesc[0].HmdToEyePose,
+										 eyeRenderDesc[1].HmdToEyePose };
+
+			double sensorSampleTime;
+			ovr_GetEyePoses(session, frameCount, ovrTrue, HmdToEyePose, EyeRenderPose, &sensorSampleTime);
+
+			ovrTimewarpProjectionDesc posTimewarpProjectionDesc = {};
+
+			for (int eye = 0; eye < 2; eye++)
+			{
+				auto& framebuffer = framebuffers[eye];
+
+				GLuint curColorTexId;
+				GLuint curDepthTexId;
+				
+				int curIndex;
+
+				ovr_GetTextureSwapChainCurrentIndex(session, framebuffer.textureSwapchain, &curIndex);
+				ovr_GetTextureSwapChainBufferGL(session, framebuffer.textureSwapchain, curIndex, &curColorTexId);
+				
+				ovr_GetTextureSwapChainCurrentIndex(session, framebuffer.depthStencilSwapchain, &curIndex);
+				ovr_GetTextureSwapChainBufferGL(session, framebuffer.depthStencilSwapchain, curIndex, &curDepthTexId);
+			
+				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, curColorTexId, 0);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, curDepthTexId, 0);
+
+				glViewport(0, 0, framebuffer.width, framebuffer.height);
+
+				glStencilMask(0xFF);
+				glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+				
+				glEnable(GL_FRAMEBUFFER_SRGB);
+
+				OVR::Matrix4f rollPitchYaw = OVR::Matrix4f::RotationY(Yaw);
+				OVR::Matrix4f finalRollPitchYaw = rollPitchYaw * OVR::Matrix4f(EyeRenderPose[eye].Orientation);
+				OVR::Vector3f finalUp = finalRollPitchYaw.Transform(OVR::Vector3f(0, 1, 0));
+				OVR::Vector3f finalForward = finalRollPitchYaw.Transform(OVR::Vector3f(0, 0, -1));
+				OVR::Vector3f shiftedEyePos = Pos2 + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
+
+				OVR::Matrix4f view = OVR::Matrix4f::LookAtRH(shiftedEyePos, shiftedEyePos + finalForward, finalUp);
+				OVR::Matrix4f proj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye], 0.01f, 1000.0f, ovrProjection_None);
+				posTimewarpProjectionDesc = ovrTimewarpProjectionDesc_FromProjection(proj, ovrProjection_None);
+
+				OVR::Matrix4f transform = proj * view * OVR::Matrix4f{};
+				transform.Transpose();
+
+
+				glBufferData(GL_UNIFORM_BUFFER, sizeof(transform), (GLfloat*)&transform, GL_DYNAMIC_DRAW);
+
+				for (auto& mesh : meshes)
+					drawMesh(mesh);
+
+				/*
+				previousPosition = currentPosition;
+				currentPosition = glm::vec3{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z };
+
+				auto replacement = currentPosition - previousPosition;
+				auto direction = glm::normalize(replacement);
+				auto coefficient = 0.0f, distance = glm::length(replacement);
+
+				for (auto& portal : portals) {
+					if (epsilon < distance && glm::intersectRayPlane(previousPosition, direction, portal.mesh.origin, portal.direction, coefficient)) {
+						auto point = previousPosition + coefficient * direction;
+
+						if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
+							point.x <= portal.mesh.maxBorders.x && point.y <= portal.mesh.maxBorders.y && point.z <= portal.mesh.maxBorders.z &&
+							0 <= coefficient && distance >= coefficient) {
+							currentRoom = portal.targetRoom;
+
+							currentPosition = currentPosition + portal.translation;
+							previousPosition = currentPosition;
+
+							break;
+						}
+					}
+				}
+
+				nodes.clear();
+
+				std::queue<Node> queue;
+
+				Node mainNode{ 0, -1, -1, currentRoom, glm::vec3{0.0f, 0.0f, 0.0f} };
+
+				queue.push(mainNode);
+				nodes.push_back(mainNode);
+
+				while (nodes.size() != maxCameraCount && !queue.empty()) {
+					int32_t parentIndex = nodes.size() - queue.size();
+
+					auto parentNode = queue.front();
+					queue.pop();
+
+					for (int32_t i = 0; i < portals.size(); i++) {
+						auto& portal = portals.at(i);
+
+						if (visible(portal, parentNode)) {
+							//TODO: Check this
+							auto nodeTranslation = parentNode.translation + portal.translation;
+
+							Node portalNode{ parentNode.layer + 1, parentIndex, i, portal.targetRoom, nodeTranslation };
+
+							queue.push(portalNode);
+							nodes.push_back(portalNode);
+
+							if (nodes.size() == maxCameraCount)
+								break;
+						}
+					}
+				}
+
+				for (uint8_t index = 0; index < nodes.size(); index++) {
+					auto& node = nodes.at(index);
+					
+					OVR::Vector3f portalEyePos = shiftedEyePos;
+
+					portalEyePos.x += node.translation.x;
+					portalEyePos.y += node.translation.y;
+					portalEyePos.z += node.translation.z;
+					
+					OVR::Matrix4f view = OVR::Matrix4f::LookAtRH(portalEyePos, portalEyePos + finalForward, finalUp);
+					OVR::Matrix4f proj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye], 0.01f, 1000.0f, ovrProjection_None);
+					posTimewarpProjectionDesc = ovrTimewarpProjectionDesc_FromProjection(proj, ovrProjection_None);
+
+					auto transform = proj * view;
+
+					glBufferData(GL_UNIFORM_BUFFER, sizeof(transform), (GLfloat*) &transform, GL_DYNAMIC_DRAW);
+
+					drawNodeView(index);
+				}
+				*/
+
+				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
+
+				ovr_CommitTextureSwapChain(session, framebuffer.textureSwapchain);
+				ovr_CommitTextureSwapChain(session, framebuffer.depthStencilSwapchain);
+			}
+
+			ovrLayerEyeFovDepth ld{};
+			ld.Header.Type = ovrLayerType_EyeFovDepth;
+			ld.Header.Flags = ovrLayerFlag_TextureOriginAtBottomLeft;
+			ld.ProjectionDesc = posTimewarpProjectionDesc;
+			ld.SensorSampleTime = sensorSampleTime;
+
+			for (int eye = 0; eye < 2; eye++)
+			{
+				auto& framebuffer = framebuffers[eye];
+
+				ld.ColorTexture[eye] = framebuffer.textureSwapchain;
+				ld.DepthTexture[eye] = framebuffer.depthStencilSwapchain;
+				ld.Viewport[eye] = OVR::Recti(OVR::Sizei(framebuffer.width, framebuffer.height));
+				ld.Fov[eye] = hmdDesc.DefaultEyeFov[eye];
+				ld.RenderPose[eye] = EyeRenderPose[eye];
+			}
+
+			ovrLayerHeader* layers = &ld.Header;
+			ovr_SubmitFrame(session, frameCount, nullptr, &layers, 1);
+		}
+
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, mirrorFramebuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		GLint w = width;
+		GLint h = height;
+		glBlitFramebuffer(0, h, w, 0,
+			0, 0, w, h,
+			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+		glfwSwapBuffers(window);
+
+		frameCount++;
+
+		/*
 		updateControls();
 		generateNodes();
 		drawScene();
@@ -951,29 +894,25 @@ void draw() {
 			0,
 			0,
 			0,
-			details.windowWidth,
-			details.windowHeight,
+			width,
+			height,
 			0,
 			0,
-			details.windowWidth,
-			details.windowHeight,
+			width,
+			height,
 			GL_COLOR_BUFFER_BIT,
 			GL_LINEAR);
 
 		glfwSwapBuffers(window);
-
-		//std::this_thread::sleep_until(state.currentTime + std::chrono::milliseconds(1));
+		*/
+		//std::this_thread::sleep_until(currentTime + std::chrono::milliseconds(1));
 	}
 }
 
 void clean() {
-	glDeleteFramebuffers(1, &FBO);
-
 	glfwTerminate();
 
-	if(VR)
-		ovr_Destroy(session);
-	
+	ovr_Destroy(session);
 	ovr_Shutdown();
 }
 
