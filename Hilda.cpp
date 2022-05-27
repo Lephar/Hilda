@@ -350,6 +350,7 @@ void createScene() {
 	*/
 	
 	// TODO: Fix portal association
+	/*
 	assetFolder = "Assets/italy/";
 
 	loadModel(Type::Camera, "camera", 2);
@@ -385,6 +386,11 @@ void createScene() {
 	loadModel(Type::Mesh, "room8", 8);
 	loadModel(Type::Mesh, "room9", 9);
 	loadModel(Type::Mesh, "roomA", 10);
+	*/
+
+	assetFolder = "Assets/italy/";
+	loadModel(Type::Camera, "center", 1);
+	loadModel(Type::Mesh, "italy", 1);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -685,6 +691,7 @@ void updateFeedbacks() {
 
 void draw() {
 	float Yaw(3.141592f);
+	//OVR::Vector3f Pos2(0, 5, 0);
 	OVR::Vector3f Pos2(currentPosition.x, currentPosition.y, currentPosition.z);
 	
 	while (true) {
