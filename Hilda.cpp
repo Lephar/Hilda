@@ -7,12 +7,9 @@ tinygltf::TinyGLTF objectLoader;
 std::string assetFolder;
 std::string shaderFolder;
 
-bool VR;
-
 ovrSession session;
 ovrGraphicsLuid luid;
 ovrHmdDesc hmdDesc;
-ovrTextureSwapChain swapchain;
 ovrEyeRenderDesc eyeRenderDesc[2];
 ovrPosef hmdToEyeViewPose[2];
 ovrLayerEyeFov layer;
@@ -23,22 +20,11 @@ ovrMirrorTexture mirrorTexture;
 GLuint mirrorTextureBuffer;
 GLuint mirrorFramebuffer;
 
-bool keyW;
-bool keyA;
-bool keyS;
-bool keyD;
-
-double_t mouseX;
-double_t mouseY;
-double_t deltaX;
-double_t deltaY;
-
 uint32_t width;
 uint32_t height;
-int32_t headsetImageCount;
 uint32_t portalCount;
 uint32_t meshCount;
-uint32_t maxCameraCount;
+uint32_t nodeLimit;
 
 uint32_t currentImage;
 uint32_t frameCount;
@@ -49,8 +35,8 @@ double_t checkPoint;
 std::chrono::time_point<std::chrono::high_resolution_clock> previousTime;
 std::chrono::time_point<std::chrono::high_resolution_clock> currentTime;
 
-glm::vec3 previousPosition;
-glm::vec3 currentPosition;
+glm::vec3 previousPositions[2];
+glm::vec3 currentPositions[2];
 uint8_t currentRoom;
 
 std::vector<GLushort> indices;
@@ -88,41 +74,12 @@ std::ostream& operator<<(std::ostream& os, Node& node) {
 
 //////////////////////////////////////////////////////////////////////////////
 
-void mouseCallback(GLFWwindow* handle, double x, double y) {
-	static_cast<void>(handle);
-
-	deltaX += mouseX - x;
-	deltaY += mouseY - y;
-	mouseX = x;
-	mouseY = y;
-}
-
 void keyboardCallback(GLFWwindow* handle, int key, int scancode, int action, int mods) {
 	static_cast<void>(scancode);
 	static_cast<void>(mods);
 
-	if (action == GLFW_RELEASE) {
-		if (key == GLFW_KEY_W)
-			keyW = false;
-		else if (key == GLFW_KEY_S)
-			keyS = false;
-		else if (key == GLFW_KEY_A)
-			keyA = false;
-		else if (key == GLFW_KEY_D)
-			keyD = false;
-	}
-	else if (action == GLFW_PRESS) {
-		if (key == GLFW_KEY_W)
-			keyW = true;
-		else if (key == GLFW_KEY_S)
-			keyS = true;
-		else if (key == GLFW_KEY_A)
-			keyA = true;
-		else if (key == GLFW_KEY_D)
-			keyD = true;
-		else if (key == GLFW_KEY_ESCAPE)
-			glfwSetWindowShouldClose(handle, 1);
-	}
+	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
+		glfwSetWindowShouldClose(handle, 1);
 }
 
 void resizeEvent(GLFWwindow* handle, int width, int height) {
@@ -300,7 +257,7 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 	if (type == Type::Camera) {
 		auto& node = model.nodes.front();
 		currentRoom = room;
-		currentPosition = getNodeTranslation(node) * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
+		currentPositions[0] = currentPositions[1] = getNodeTranslation(node) * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
 	}
 
 	else {
@@ -330,9 +287,19 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 }
 
 void createScene() {
+	assetFolder = "Assets/backroom/";
+
+	loadModel(Type::Camera, "c", 1);
+
+	loadModel(Type::Portal, "p12", 1);
+	loadModel(Type::Portal, "p21", 2);
+
+	loadModel(Type::Mesh, "r1", 1);
+	loadModel(Type::Mesh, "r2", 2);
+
 	/*
 	assetFolder = "Assets/backroom/";
-	
+
 	loadModel("camera", Type::Camera, 1);
 
 	loadModel("portal12", Type::Portal, 1, 2);
@@ -347,10 +314,18 @@ void createScene() {
 	loadModel("room4", Type::Mesh, 4);
 	loadModel("room5", Type::Mesh, 5);
 	loadModel("room6", Type::Mesh, 6);
-	*/
+
+	assetFolder = "Assets/backroom/";
+	
+	loadModel( Type::Camera, "camera", 1);
+
+	loadModel( Type::Portal, "portal12", 1);
+	//loadModel( Type::Portal, "portal21", 2);
+
+	loadModel( Type::Mesh, "room1", 1);
+	loadModel( Type::Mesh, "room2", 2);
 	
 	// TODO: Fix portal association
-	/*
 	assetFolder = "Assets/italy/";
 
 	loadModel(Type::Camera, "camera", 2);
@@ -386,11 +361,20 @@ void createScene() {
 	loadModel(Type::Mesh, "room8", 8);
 	loadModel(Type::Mesh, "room9", 9);
 	loadModel(Type::Mesh, "roomA", 10);
-	*/
 
 	assetFolder = "Assets/italy/";
-	loadModel(Type::Camera, "center", 1);
-	loadModel(Type::Mesh, "italy", 1);
+	
+	loadModel(Type::Camera, "camera", 3);
+
+	loadModel(Type::Portal, "portal23", 2);
+	loadModel(Type::Portal, "portal32", 3);
+	loadModel(Type::Portal, "portal34", 3);
+	loadModel(Type::Portal, "portal43", 4);
+	
+	loadModel(Type::Mesh, "room2", 2);
+	loadModel(Type::Mesh, "room3", 3);
+	loadModel(Type::Mesh, "room4", 4);
+	*/
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -449,21 +433,14 @@ GLuint createProgram(GLuint vertex, GLuint fragment)
 
 void setup() {
 	ovr_Initialize(nullptr);
-	VR = OVR_SUCCESS(ovr_Create(&session, &luid));
+	ovr_Create(&session, &luid);
 
 	hmdDesc = ovr_GetHmdDesc(session);
 
 	width = hmdDesc.Resolution.w / 2;
 	height = hmdDesc.Resolution.h / 2;
 	
-	maxCameraCount = 15;	// 2 ^ 4 - 1 - 1
-	
-	keyW = false;
-	keyA = false;
-	keyS = false;
-	keyD = false;
-	deltaX = 0.0f;
-	deltaY = 0.0f;
+	nodeLimit = 15;	// 2 ^ 4 - 1 - 1
 
 	currentImage = 0;
 	frameCount = 0;
@@ -482,10 +459,7 @@ void setup() {
 
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, keyboardCallback);
-	glfwSetCursorPosCallback(window, mouseCallback);
 	glfwSetFramebufferSizeCallback(window, resizeEvent);
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	glfwGetCursorPos(window, &mouseX, &mouseY);
 
 	glfwSwapInterval(0);
 
@@ -493,18 +467,20 @@ void setup() {
 
 	createScene();
 
+	glEnable(GL_FRAMEBUFFER_SRGB);
 	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_STENCIL_TEST);
+	glEnable(GL_SCISSOR_TEST);
+
 	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
-
-	glEnable(GL_DEPTH_TEST);
+	
 	glDepthMask(GL_TRUE);
 	glDepthFunc(GL_LESS);
+
 	glClearDepth(1.0f);
-
-	glEnable(GL_STENCIL_TEST);
 	glClearStencil(0);
-
 	glClearColor(0.4f, 0.8f, 1.0f, 1.0f);
 
 	for (int eye = 0; eye < 2; eye++) {
@@ -640,6 +616,8 @@ void drawNodeView(uint8_t nodeIndex) {
 
 		glStencilFunc(GL_EQUAL, value, 0x0F);
 		glStencilMask(0xF0);
+
+		std::cout << (int)value << std::endl;
 	}
 
 	else {
@@ -647,15 +625,22 @@ void drawNodeView(uint8_t nodeIndex) {
 
 		glStencilFunc(GL_EQUAL, value, 0xF0);
 		glStencilMask(0x0F);
+
+		std::cout << (int)value << std::endl;
 	}
 
 	for (auto& mesh : meshes)
-		drawMesh(mesh);
+		if(node.room == mesh.room)
+			drawMesh(mesh);
 
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
 	for (uint8_t childIndex = nodeIndex + 1; childIndex < nodes.size(); childIndex++) {
 		auto& childNode = nodes.at(childIndex);
+		auto& portalMesh = portals.at(childNode.portalIndex).mesh;
+
+		if (childNode.room != portalMesh.room)
+			continue;
 
 		if (nodeIndex == childNode.parentIndex) {
 			if (!mod) {
@@ -672,7 +657,6 @@ void drawNodeView(uint8_t nodeIndex) {
 				glStencilMask(0x0F);
 			}
 
-			auto& portalMesh = portals.at(childNode.portalIndex).mesh;
 			drawMesh(portalMesh);
 		}
 	}
@@ -690,9 +674,11 @@ void updateFeedbacks() {
 }
 
 void draw() {
-	float Yaw(3.141592f);
-	//OVR::Vector3f Pos2(0, 5, 0);
-	OVR::Vector3f Pos2(currentPosition.x, currentPosition.y, currentPosition.z);
+	float Yaw = 0;
+
+	OVR::Vector3f Pos[2];
+	Pos[0] = OVR::Vector3f(currentPositions[0].x, currentPositions[0].y, currentPositions[0].z);
+	Pos[1] = OVR::Vector3f(currentPositions[1].x, currentPositions[1].y, currentPositions[1].z);
 	
 	while (true) {
 		glfwPollEvents();
@@ -744,50 +730,35 @@ void draw() {
 				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, curDepthTexId, 0);
 
 				glViewport(0, 0, framebuffer.width, framebuffer.height);
+				glScissor(0, 0, framebuffer.width, framebuffer.height);
 
 				glStencilMask(0xFF);
 				glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-				
-				glEnable(GL_FRAMEBUFFER_SRGB);
 
 				OVR::Matrix4f rollPitchYaw = OVR::Matrix4f::RotationY(Yaw);
 				OVR::Matrix4f finalRollPitchYaw = rollPitchYaw * OVR::Matrix4f(EyeRenderPose[eye].Orientation);
 				OVR::Vector3f finalUp = finalRollPitchYaw.Transform(OVR::Vector3f(0, 1, 0));
 				OVR::Vector3f finalForward = finalRollPitchYaw.Transform(OVR::Vector3f(0, 0, -1));
-				OVR::Vector3f shiftedEyePos = Pos2 + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
+				OVR::Vector3f shiftedEyePos = Pos[eye] + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
 
-				OVR::Matrix4f view = OVR::Matrix4f::LookAtRH(shiftedEyePos, shiftedEyePos + finalForward, finalUp);
-				OVR::Matrix4f proj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye], 0.01f, 1000.0f, ovrProjection_None);
-				posTimewarpProjectionDesc = ovrTimewarpProjectionDesc_FromProjection(proj, ovrProjection_None);
+				previousPositions[eye] = currentPositions[eye];
+				currentPositions[eye] = glm::vec3{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z };
 
-				OVR::Matrix4f transform = proj * view * OVR::Matrix4f{};
-				transform.Transpose();
-
-
-				glBufferData(GL_UNIFORM_BUFFER, sizeof(transform), (GLfloat*)&transform, GL_DYNAMIC_DRAW);
-
-				for (auto& mesh : meshes)
-					drawMesh(mesh);
-
-				/*
-				previousPosition = currentPosition;
-				currentPosition = glm::vec3{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z };
-
-				auto replacement = currentPosition - previousPosition;
+				auto replacement = currentPositions[eye] - previousPositions[eye];
 				auto direction = glm::normalize(replacement);
 				auto coefficient = 0.0f, distance = glm::length(replacement);
 
 				for (auto& portal : portals) {
-					if (epsilon < distance && glm::intersectRayPlane(previousPosition, direction, portal.mesh.origin, portal.direction, coefficient)) {
-						auto point = previousPosition + coefficient * direction;
+					if (epsilon < distance && glm::intersectRayPlane(previousPositions[eye], direction, portal.mesh.origin, portal.direction, coefficient)) {
+						auto point = previousPositions[eye] + coefficient * direction;
 
 						if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
 							point.x <= portal.mesh.maxBorders.x && point.y <= portal.mesh.maxBorders.y && point.z <= portal.mesh.maxBorders.z &&
 							0 <= coefficient && distance >= coefficient) {
 							currentRoom = portal.targetRoom;
 
-							currentPosition = currentPosition + portal.translation;
-							previousPosition = currentPosition;
+							currentPositions[eye] = currentPositions[eye] + portal.translation;
+							previousPositions[eye] = currentPositions[eye];
 
 							break;
 						}
@@ -798,12 +769,12 @@ void draw() {
 
 				std::queue<Node> queue;
 
-				Node mainNode{ 0, -1, -1, currentRoom, glm::vec3{0.0f, 0.0f, 0.0f} };
+				Node mainNode{ 0, -1, -1, currentRoom, glm::vec3{shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z} };
 
 				queue.push(mainNode);
 				nodes.push_back(mainNode);
 
-				while (nodes.size() != maxCameraCount && !queue.empty()) {
+				while (nodes.size() != nodeLimit && !queue.empty()) {
 					int32_t parentIndex = nodes.size() - queue.size();
 
 					auto parentNode = queue.front();
@@ -813,40 +784,35 @@ void draw() {
 						auto& portal = portals.at(i);
 
 						if (visible(portal, parentNode)) {
-							//TODO: Check this
-							auto nodeTranslation = parentNode.translation + portal.translation;
-
-							Node portalNode{ parentNode.layer + 1, parentIndex, i, portal.targetRoom, nodeTranslation };
+							Node portalNode{ parentNode.layer + 1, parentIndex, i, portal.targetRoom, parentNode.translation + portal.translation };
 
 							queue.push(portalNode);
 							nodes.push_back(portalNode);
 
-							if (nodes.size() == maxCameraCount)
+							if (nodes.size() == nodeLimit)
 								break;
 						}
 					}
 				}
 
+				std::cout << nodes.size() << std::endl;
+
 				for (uint8_t index = 0; index < nodes.size(); index++) {
 					auto& node = nodes.at(index);
 					
-					OVR::Vector3f portalEyePos = shiftedEyePos;
-
-					portalEyePos.x += node.translation.x;
-					portalEyePos.y += node.translation.y;
-					portalEyePos.z += node.translation.z;
+					OVR::Vector3f nodeEyePos(node.translation.x, node.translation.y, node.translation.z);
 					
-					OVR::Matrix4f view = OVR::Matrix4f::LookAtRH(portalEyePos, portalEyePos + finalForward, finalUp);
+					OVR::Matrix4f view = OVR::Matrix4f::LookAtRH(nodeEyePos, nodeEyePos + finalForward, finalUp);
 					OVR::Matrix4f proj = ovrMatrix4f_Projection(hmdDesc.DefaultEyeFov[eye], 0.01f, 1000.0f, ovrProjection_None);
 					posTimewarpProjectionDesc = ovrTimewarpProjectionDesc_FromProjection(proj, ovrProjection_None);
 
 					auto transform = proj * view;
+					transform.Transpose();
 
 					glBufferData(GL_UNIFORM_BUFFER, sizeof(transform), (GLfloat*) &transform, GL_DYNAMIC_DRAW);
 
 					drawNodeView(index);
 				}
-				*/
 
 				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
 				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
@@ -881,9 +847,7 @@ void draw() {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		GLint w = width;
 		GLint h = height;
-		glBlitFramebuffer(0, h, w, 0,
-			0, 0, w, h,
-			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBlitFramebuffer(0, h, w, 0, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 
 		glfwSwapBuffers(window);
