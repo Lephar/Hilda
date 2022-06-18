@@ -15,6 +15,7 @@ ovrPosef hmdToEyeViewPose[2];
 ovrLayerEyeFov layer;
 
 Framebuffer framebuffers[2];
+EyeView eyeViews[2];
 
 ovrMirrorTexture mirrorTexture;
 GLuint mirrorTextureBuffer;
@@ -47,7 +48,6 @@ std::vector<Mesh> meshes;
 std::vector<Portal> portals;
 std::vector<Node> nodes;
 
-GLuint FBO;
 GLuint VAO;
 GLuint VBO;
 GLuint EBO;
@@ -484,18 +484,52 @@ void setup() {
 	glClearColor(0.4f, 0.8f, 1.0f, 1.0f);
 
 	for (int eye = 0; eye < 2; eye++) {
+		auto& eyeView = eyeViews[eye];
 		auto& framebuffer = framebuffers[eye];
 
 		ovrSizei idealTextureSize = ovr_GetFovTextureSize(session, ovrEyeType(eye), hmdDesc.DefaultEyeFov[eye], 1);
-			
+
 		framebuffer.width = idealTextureSize.w;
 		framebuffer.height = idealTextureSize.h;
+
+		glGenFramebuffers(1, &framebuffer.framebuffer);
+
+		glGenTextures(1, &framebuffer.colorTexture);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.colorTexture);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB, framebuffer.width, framebuffer.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer.colorTexture, 0);
+
+		glGenTextures(1, &framebuffer.depthStencilTexture);
+		glBindTexture(GL_TEXTURE_2D, framebuffer.depthStencilTexture);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, framebuffer.width, framebuffer.height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, nullptr);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, framebuffer.depthStencilTexture, 0);
+
+		std::cout << eye << ": " << (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) << std::endl;
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		
+		eyeView.width = idealTextureSize.w;
+		eyeView.height = idealTextureSize.h;
 
 		ovrTextureSwapChainDesc desc = {};
 		desc.Type = ovrTexture_2D;
 		desc.ArraySize = 1;
-		desc.Width = framebuffer.width;
-		desc.Height = framebuffer.height;
+		desc.Width = eyeView.width;
+		desc.Height = eyeView.height;
 		desc.MipLevels = 1;
 		desc.SampleCount = 1;
 		desc.StaticImage = ovrFalse;
@@ -504,13 +538,13 @@ void setup() {
 
 		desc.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
 
-		ovr_CreateTextureSwapChainGL(session, &desc, &framebuffer.textureSwapchain);
-		ovr_GetTextureSwapChainLength(session, framebuffer.textureSwapchain, &length);
+		ovr_CreateTextureSwapChainGL(session, &desc, &eyeView.textureSwapchain);
+		ovr_GetTextureSwapChainLength(session, eyeView.textureSwapchain, &length);
 
 		for (int i = 0; i < length; i++)
 		{
 			GLuint textureIndex;
-			ovr_GetTextureSwapChainBufferGL(session, framebuffer.textureSwapchain, i, &textureIndex);
+			ovr_GetTextureSwapChainBufferGL(session, eyeView.textureSwapchain, i, &textureIndex);
 			glBindTexture(GL_TEXTURE_2D, textureIndex);
 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -519,15 +553,15 @@ void setup() {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
 
-		desc.Format = OVR_FORMAT_D32_FLOAT_S8X24_UINT;
+		desc.Format = OVR_FORMAT_D24_UNORM_S8_UINT;
 
-		ovr_CreateTextureSwapChainGL(session, &desc, &framebuffer.depthStencilSwapchain);
-		ovr_GetTextureSwapChainLength(session, framebuffer.depthStencilSwapchain, &length);
+		ovr_CreateTextureSwapChainGL(session, &desc, &eyeView.depthStencilSwapchain);
+		ovr_GetTextureSwapChainLength(session, eyeView.depthStencilSwapchain, &length);
 
-		for (int i = 0; i < length; ++i)
+		for (int i = 0; i < length; i++)
 		{
 			GLuint textureIndex;
-			ovr_GetTextureSwapChainBufferGL(session, framebuffer.depthStencilSwapchain, i, &textureIndex);
+			ovr_GetTextureSwapChainBufferGL(session, eyeView.depthStencilSwapchain, i, &textureIndex);
 			glBindTexture(GL_TEXTURE_2D, textureIndex);
 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -536,12 +570,12 @@ void setup() {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		}
 
-		glGenFramebuffers(1, &framebuffer.framebuffer);
+		glGenFramebuffers(1, &eyeView.framebuffer);
 	}
 
 	ovrMirrorTextureDesc mirrorDescriptor{};
 	mirrorDescriptor.Width = width;
-	mirrorDescriptor.Height = width;
+	mirrorDescriptor.Height = height;
 	mirrorDescriptor.Format = OVR_FORMAT_R8G8B8A8_UNORM_SRGB;
 
 	ovr_CreateMirrorTextureWithOptionsGL(session, &mirrorDescriptor, &mirrorTexture);
@@ -712,6 +746,7 @@ void draw() {
 
 			for (int eye = 0; eye < 2; eye++)
 			{
+				auto& eyeView = eyeViews[eye];
 				auto& framebuffer = framebuffers[eye];
 
 				GLuint curColorTexId;
@@ -719,21 +754,11 @@ void draw() {
 				
 				int curIndex;
 
-				ovr_GetTextureSwapChainCurrentIndex(session, framebuffer.textureSwapchain, &curIndex);
-				ovr_GetTextureSwapChainBufferGL(session, framebuffer.textureSwapchain, curIndex, &curColorTexId);
+				ovr_GetTextureSwapChainCurrentIndex(session, eyeView.textureSwapchain, &curIndex);
+				ovr_GetTextureSwapChainBufferGL(session, eyeView.textureSwapchain, curIndex, &curColorTexId);
 				
-				ovr_GetTextureSwapChainCurrentIndex(session, framebuffer.depthStencilSwapchain, &curIndex);
-				ovr_GetTextureSwapChainBufferGL(session, framebuffer.depthStencilSwapchain, curIndex, &curDepthTexId);
-			
-				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
-				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, curColorTexId, 0);
-				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, curDepthTexId, 0);
-
-				glViewport(0, 0, framebuffer.width, framebuffer.height);
-				glScissor(0, 0, framebuffer.width, framebuffer.height);
-
-				glStencilMask(0xFF);
-				glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+				ovr_GetTextureSwapChainCurrentIndex(session, eyeView.depthStencilSwapchain, &curIndex);
+				ovr_GetTextureSwapChainBufferGL(session, eyeView.depthStencilSwapchain, curIndex, &curDepthTexId);
 
 				OVR::Matrix4f rollPitchYaw = OVR::Matrix4f::RotationY(Yaw);
 				OVR::Matrix4f finalRollPitchYaw = rollPitchYaw * OVR::Matrix4f(EyeRenderPose[eye].Orientation);
@@ -797,6 +822,14 @@ void draw() {
 
 				std::cout << nodes.size() << std::endl;
 
+				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
+
+				glViewport(0, 0, eyeView.width, eyeView.height);
+				glScissor(0, 0, eyeView.width, eyeView.height);
+
+				glStencilMask(0xFF);
+				glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
 				for (uint8_t index = 0; index < nodes.size(); index++) {
 					auto& node = nodes.at(index);
 					
@@ -814,12 +847,19 @@ void draw() {
 					drawNodeView(index);
 				}
 
-				glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.framebuffer);
+				glBindFramebuffer(GL_FRAMEBUFFER, eyeView.framebuffer);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, curColorTexId, 0);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, curDepthTexId, 0);
+
+				glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer.framebuffer);
+				glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+
+				glBindFramebuffer(GL_FRAMEBUFFER, eyeView.framebuffer);
 				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
 				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 
-				ovr_CommitTextureSwapChain(session, framebuffer.textureSwapchain);
-				ovr_CommitTextureSwapChain(session, framebuffer.depthStencilSwapchain);
+				ovr_CommitTextureSwapChain(session, eyeView.textureSwapchain);
+				ovr_CommitTextureSwapChain(session, eyeView.depthStencilSwapchain);
 			}
 
 			ovrLayerEyeFovDepth ld{};
@@ -830,11 +870,11 @@ void draw() {
 
 			for (int eye = 0; eye < 2; eye++)
 			{
-				auto& framebuffer = framebuffers[eye];
+				auto& eyeView = eyeViews[eye];
 
-				ld.ColorTexture[eye] = framebuffer.textureSwapchain;
-				ld.DepthTexture[eye] = framebuffer.depthStencilSwapchain;
-				ld.Viewport[eye] = OVR::Recti(OVR::Sizei(framebuffer.width, framebuffer.height));
+				ld.ColorTexture[eye] = eyeView.textureSwapchain;
+				ld.DepthTexture[eye] = eyeView.depthStencilSwapchain;
+				ld.Viewport[eye] = OVR::Recti(OVR::Sizei(eyeView.width, eyeView.height));
 				ld.Fov[eye] = hmdDesc.DefaultEyeFov[eye];
 				ld.RenderPose[eye] = EyeRenderPose[eye];
 			}
@@ -845,38 +885,13 @@ void draw() {
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, mirrorFramebuffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		GLint w = width;
-		GLint h = height;
-		glBlitFramebuffer(0, h, w, 0, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+		glBlitFramebuffer(0, height, width, 0, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 
 		glfwSwapBuffers(window);
 
 		frameCount++;
-
-		/*
-		updateControls();
-		generateNodes();
-		drawScene();
-		updateFeedbacks();
-
-		//storePixels();
-		glBlitNamedFramebuffer(FBO,
-			0,
-			0,
-			0,
-			width,
-			height,
-			0,
-			0,
-			width,
-			height,
-			GL_COLOR_BUFFER_BIT,
-			GL_LINEAR);
-
-		glfwSwapBuffers(window);
-		*/
-		//std::this_thread::sleep_until(currentTime + std::chrono::milliseconds(1));
 	}
 }
 
