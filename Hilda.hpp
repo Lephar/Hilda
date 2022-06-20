@@ -52,14 +52,6 @@ struct Framebuffer {
 	uint32_t width;
 	uint32_t height;
 	GLuint framebuffer;
-	GLuint depthStencilTexture;
-	GLuint colorTexture;
-};
-
-struct EyeView {
-	uint32_t width;
-	uint32_t height;
-	GLuint framebuffer;
 	ovrTextureSwapChain depthStencilSwapchain;
 	ovrTextureSwapChain textureSwapchain;
 };
