@@ -35,9 +35,10 @@ double_t checkPoint;
 std::chrono::time_point<std::chrono::high_resolution_clock> previousTime;
 std::chrono::time_point<std::chrono::high_resolution_clock> currentTime;
 
+uint8_t currentRooms[2];
 glm::vec3 previousPositions[2];
 glm::vec3 currentPositions[2];
-uint8_t currentRoom;
+glm::mat4 currentTranslations[2];
 
 std::vector<GLushort> indices;
 std::vector<Vertex> vertices;
@@ -230,7 +231,7 @@ void loadMesh(const tinygltf::Model& modelData, const tinygltf::Mesh& meshData, 
 			Portal portal{};
 
 			portal.mesh = mesh;
-			portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ -1.0f, 0.0f, 0.0f, 0.0f }));
+			portal.direction = glm::normalize(glm::vec3(mesh.transform * glm::vec4{ 0.0f, 0.0f, -1.0f, 0.0f }));
 
 			portalCount++;
 			portals.push_back(portal);
@@ -255,8 +256,8 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 
 	if (type == Type::Camera) {
 		auto& node = model.nodes.front();
-		currentRoom = room;
-		currentPositions[0] = currentPositions[1] = getNodeTranslation(node) * glm::vec4{ 0.0f, 0.0f, 0.0f, 1.0f };
+		currentRooms[0] = currentRooms[1] = room;
+		currentTranslations[0] = currentTranslations[1] = getNodeTranslation(node);
 	}
 
 	else {
@@ -278,6 +279,8 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 
 			bluePortal.targetRoom = orangePortal.mesh.room;
 			orangePortal.targetRoom = bluePortal.mesh.room;
+
+			std::cout << (int)bluePortal.targetRoom << " " << (int)orangePortal.targetRoom << std::endl;
 
 			bluePortal.translation = orangePortal.mesh.origin - bluePortal.mesh.origin;
 			orangePortal.translation = bluePortal.mesh.origin - orangePortal.mesh.origin;
@@ -669,8 +672,8 @@ void draw() {
 	float Yaw = 0;
 
 	OVR::Vector3f Pos[2];
-	Pos[0] = OVR::Vector3f(currentPositions[0].x, currentPositions[0].y, currentPositions[0].z);
-	Pos[1] = OVR::Vector3f(currentPositions[1].x, currentPositions[1].y, currentPositions[1].z);
+	Pos[0] = OVR::Vector3f(0.0f, 0.0f, 0.0f);
+	Pos[1] = OVR::Vector3f(0.0f, 0.0f, 0.0f);
 
 	while (true) {
 		glfwPollEvents();
@@ -694,8 +697,7 @@ void draw() {
 			eyeRenderDesc[1] = ovr_GetRenderDesc(session, ovrEye_Right, hmdDesc.DefaultEyeFov[1]);
 
 			ovrPosef EyeRenderPose[2];
-			ovrPosef HmdToEyePose[2] = { eyeRenderDesc[0].HmdToEyePose,
-										 eyeRenderDesc[1].HmdToEyePose };
+			ovrPosef HmdToEyePose[2] = { eyeRenderDesc[0].HmdToEyePose, eyeRenderDesc[1].HmdToEyePose };
 
 			double sensorSampleTime;
 			ovr_GetEyePoses(session, frameCount, ovrTrue, HmdToEyePose, EyeRenderPose, &sensorSampleTime);
@@ -705,6 +707,10 @@ void draw() {
 			for (int eye = 0; eye < 2; eye++)
 			{
 				auto& framebuffer = framebuffers[eye];
+				auto& currentRoom = currentRooms[eye];
+				auto& previousPosition = previousPositions[eye];
+				auto& currentPosition = currentPositions[eye];
+				auto& currentTranslation = currentTranslations[eye];
 
 				GLuint curColorTexId;
 				GLuint curDepthTexId;
@@ -733,24 +739,30 @@ void draw() {
 				OVR::Vector3f finalForward = finalRollPitchYaw.Transform(OVR::Vector3f(0, 0, -1));
 				OVR::Vector3f shiftedEyePos = Pos[eye] + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
 
-				previousPositions[eye] = currentPositions[eye];
-				currentPositions[eye] = glm::vec3{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z };
+				previousPosition = currentPosition;
+				currentPosition = currentTranslation * glm::vec4{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z, 1.0f };
 
-				auto replacement = currentPositions[eye] - previousPositions[eye];
+				auto replacement = currentPosition - previousPosition;
 				auto direction = glm::normalize(replacement);
 				auto coefficient = 0.0f, distance = glm::length(replacement);
 
 				for (auto& portal : portals) {
-					if (epsilon < distance && glm::intersectRayPlane(previousPositions[eye], direction, portal.mesh.origin, portal.direction, coefficient)) {
-						auto point = previousPositions[eye] + coefficient * direction;
+					if (epsilon < distance && glm::intersectRayPlane(previousPosition, direction, portal.mesh.origin, portal.direction, coefficient)) {
+						auto point = previousPosition + coefficient * direction;
 
 						if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
 							point.x <= portal.mesh.maxBorders.x && point.y <= portal.mesh.maxBorders.y && point.z <= portal.mesh.maxBorders.z &&
 							0 <= coefficient && distance >= coefficient) {
+							std::cout << "Teleported eye " << eye << " from room " << (int)currentRoom << " to room " << (int)portal.targetRoom << std::endl;
+
 							currentRoom = portal.targetRoom;
 
-							currentPositions[eye] = currentPositions[eye] + portal.translation;
-							previousPositions[eye] = currentPositions[eye];
+							currentTranslation[3][0] += portal.translation[0];
+							currentTranslation[3][1] += portal.translation[1];
+							currentTranslation[3][2] += portal.translation[2];
+
+							currentPosition = currentPosition + portal.translation;
+							previousPosition = currentPosition;
 
 							break;
 						}
@@ -761,7 +773,7 @@ void draw() {
 
 				std::queue<Node> queue;
 
-				Node mainNode{ 0, -1, -1, currentRoom, glm::vec3{shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z} };
+				Node mainNode{ 0, -1, -1, currentRoom, currentPosition };
 
 				queue.push(mainNode);
 				nodes.push_back(mainNode);
@@ -840,6 +852,7 @@ void draw() {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		glfwSwapBuffers(window);
+		updateFeedbacks();
 
 		frameCount++;
 	}
