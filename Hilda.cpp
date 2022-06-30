@@ -280,10 +280,10 @@ void loadModel(Type type, const std::string name, uint8_t room) {
 			bluePortal.targetRoom = orangePortal.mesh.room;
 			orangePortal.targetRoom = bluePortal.mesh.room;
 
-			std::cout << (int)bluePortal.targetRoom << " " << (int)orangePortal.targetRoom << std::endl;
-
 			bluePortal.translation = orangePortal.mesh.origin - bluePortal.mesh.origin;
 			orangePortal.translation = bluePortal.mesh.origin - orangePortal.mesh.origin;
+
+			std::cout << "Portal created between room " << (int)orangePortal.targetRoom << " and " << (int)bluePortal.targetRoom << std::endl;
 		}
 	}
 }
@@ -295,87 +295,38 @@ void createScene() {
 
 	loadModel(Type::Portal, "p12", 1);
 	loadModel(Type::Portal, "p21", 2);
+	loadModel(Type::Portal, "p13", 1);
+	loadModel(Type::Portal, "p31", 3);
+	loadModel(Type::Portal, "p24", 2);
+	loadModel(Type::Portal, "p42", 4);
+	loadModel(Type::Portal, "p35", 3);
+	loadModel(Type::Portal, "p53", 5);
 
 	loadModel(Type::Mesh, "r1", 1);
 	loadModel(Type::Mesh, "r2", 2);
-
+	loadModel(Type::Mesh, "r3", 3);
+	loadModel(Type::Mesh, "r4", 4);
+	loadModel(Type::Mesh, "r5", 5);
 	/*
-	assetFolder = "Assets/backroom/";
-
-	loadModel("camera", Type::Camera, 1);
-
-	loadModel("portal12", Type::Portal, 1, 2);
-	loadModel("portal13", Type::Portal, 1, 3);
-	loadModel("portal14", Type::Portal, 1, 4);
-	loadModel("portal15", Type::Portal, 1, 5);
-	loadModel("portal26", Type::Portal, 2, 6);
-
-	loadModel("room1", Type::Mesh, 1);
-	loadModel("room2", Type::Mesh, 2);
-	loadModel("room3", Type::Mesh, 3);
-	loadModel("room4", Type::Mesh, 4);
-	loadModel("room5", Type::Mesh, 5);
-	loadModel("room6", Type::Mesh, 6);
-
-	assetFolder = "Assets/backroom/";
-
-	loadModel( Type::Camera, "camera", 1);
-
-	loadModel( Type::Portal, "portal12", 1);
-	//loadModel( Type::Portal, "portal21", 2);
-
-	loadModel( Type::Mesh, "room1", 1);
-	loadModel( Type::Mesh, "room2", 2);
-
-	// TODO: Fix portal association
-	assetFolder = "Assets/italy/";
-
-	loadModel(Type::Camera, "camera", 2);
-
-	loadModel(Type::Portal, "portal12", 1);
-	loadModel(Type::Portal, "portal21", 2);
-	loadModel(Type::Portal, "portal23", 2);
-	loadModel(Type::Portal, "portal32", 3);
-	loadModel(Type::Portal, "portal34", 3);
-	loadModel(Type::Portal, "portal43", 4);
-	loadModel(Type::Portal, "portal45", 4);
-	loadModel(Type::Portal, "portal54", 5);
-	loadModel(Type::Portal, "portal56", 5);
-	loadModel(Type::Portal, "portal65", 6);
-	loadModel(Type::Portal, "portal67", 6);
-	loadModel(Type::Portal, "portal76", 7);
-	loadModel(Type::Portal, "portal78", 7);
-	loadModel(Type::Portal, "portal87", 8);
-	loadModel(Type::Portal, "portal89", 8);
-	loadModel(Type::Portal, "portal98", 9);
-	loadModel(Type::Portal, "portal9A", 9);
-	loadModel(Type::Portal, "portalA9", 10);
-	loadModel(Type::Portal, "portalA1", 10);
-	loadModel(Type::Portal, "portal1A", 1);
-
-	loadModel(Type::Mesh, "room1", 1);
-	loadModel(Type::Mesh, "room2", 2);
-	loadModel(Type::Mesh, "room3", 3);
-	loadModel(Type::Mesh, "room4", 4);
-	loadModel(Type::Mesh, "room5", 5);
-	loadModel(Type::Mesh, "room6", 6);
-	loadModel(Type::Mesh, "room7", 7);
-	loadModel(Type::Mesh, "room8", 8);
-	loadModel(Type::Mesh, "room9", 9);
-	loadModel(Type::Mesh, "roomA", 10);
 
 	assetFolder = "Assets/italy/";
 
-	loadModel(Type::Camera, "camera", 3);
+	loadModel(Type::Camera, "c", 1);
 
-	loadModel(Type::Portal, "portal23", 2);
-	loadModel(Type::Portal, "portal32", 3);
-	loadModel(Type::Portal, "portal34", 3);
-	loadModel(Type::Portal, "portal43", 4);
+	loadModel(Type::Portal, "p12", 1);
+	loadModel(Type::Portal, "p21", 2);
+	loadModel(Type::Portal, "p23", 2);
+	loadModel(Type::Portal, "p32", 3);
+	loadModel(Type::Portal, "p34", 3);
+	loadModel(Type::Portal, "p43", 4);
+	loadModel(Type::Portal, "p35", 3);
+	loadModel(Type::Portal, "p53", 5);
 
-	loadModel(Type::Mesh, "room2", 2);
-	loadModel(Type::Mesh, "room3", 3);
-	loadModel(Type::Mesh, "room4", 4);
+	loadModel(Type::Mesh, "r1", 1);
+	loadModel(Type::Mesh, "r2", 2);
+	loadModel(Type::Mesh, "r3", 3);
+	loadModel(Type::Mesh, "r4", 4);
+	loadModel(Type::Mesh, "r5", 5);
 	*/
 }
 
@@ -670,10 +621,7 @@ void updateFeedbacks() {
 
 void draw() {
 	float Yaw = 0;
-
-	OVR::Vector3f Pos[2];
-	Pos[0] = OVR::Vector3f(0.0f, 0.0f, 0.0f);
-	Pos[1] = OVR::Vector3f(0.0f, 0.0f, 0.0f);
+	//float Yaw = glm::pi<float>();
 
 	while (true) {
 		glfwPollEvents();
@@ -737,7 +685,7 @@ void draw() {
 				OVR::Matrix4f finalRollPitchYaw = rollPitchYaw * OVR::Matrix4f(EyeRenderPose[eye].Orientation);
 				OVR::Vector3f finalUp = finalRollPitchYaw.Transform(OVR::Vector3f(0, 1, 0));
 				OVR::Vector3f finalForward = finalRollPitchYaw.Transform(OVR::Vector3f(0, 0, -1));
-				OVR::Vector3f shiftedEyePos = Pos[eye] + rollPitchYaw.Transform(EyeRenderPose[eye].Position);
+				OVR::Vector3f shiftedEyePos = rollPitchYaw.Transform(EyeRenderPose[eye].Position);
 
 				previousPosition = currentPosition;
 				currentPosition = currentTranslation * glm::vec4{ shiftedEyePos.x, shiftedEyePos.y, shiftedEyePos.z, 1.0f };
@@ -745,6 +693,7 @@ void draw() {
 				auto replacement = currentPosition - previousPosition;
 				auto direction = glm::normalize(replacement);
 				auto coefficient = 0.0f, distance = glm::length(replacement);
+				auto teleported = frameCount == 0 ? true : false;
 
 				for (auto& portal : portals) {
 					if (epsilon < distance && glm::intersectRayPlane(previousPosition, direction, portal.mesh.origin, portal.direction, coefficient)) {
@@ -753,7 +702,6 @@ void draw() {
 						if (point.x >= portal.mesh.minBorders.x && point.y >= portal.mesh.minBorders.y && point.z >= portal.mesh.minBorders.z &&
 							point.x <= portal.mesh.maxBorders.x && point.y <= portal.mesh.maxBorders.y && point.z <= portal.mesh.maxBorders.z &&
 							0 <= coefficient && distance >= coefficient) {
-							std::cout << "Teleported eye " << eye << " from room " << (int)currentRoom << " to room " << (int)portal.targetRoom << std::endl;
 
 							currentRoom = portal.targetRoom;
 
@@ -764,6 +712,9 @@ void draw() {
 							currentPosition = currentPosition + portal.translation;
 							previousPosition = currentPosition;
 
+							std::cout << "Teleported eye " << eye << " from room " << (int)currentRoom << " to room " << (int)portal.targetRoom << std::endl;
+
+							teleported = true;
 							break;
 						}
 					}
@@ -778,26 +729,36 @@ void draw() {
 				queue.push(mainNode);
 				nodes.push_back(mainNode);
 
+				if(teleported)
+					std::cout << "Node list for eye " << eye << ": " << mainNode.layer << ":" << (int)mainNode.room << " ";
+
 				while (nodes.size() != nodeLimit && !queue.empty()) {
 					int32_t parentIndex = nodes.size() - queue.size();
 
 					auto parentNode = queue.front();
 					queue.pop();
 
-					for (int32_t i = 0; i < portals.size(); i++) {
+					for (int32_t i = 0; i < portalCount; i++) {
 						auto& portal = portals.at(i);
 
 						if (visible(portal, parentNode)) {
-							Node portalNode{ parentNode.layer + 1, parentIndex, i, portal.targetRoom, parentNode.translation + portal.translation };
+							auto translation = parentNode.translation + portal.translation;
+							Node portalNode{ parentNode.layer + 1, parentIndex, i, portal.targetRoom, translation };
 
 							queue.push(portalNode);
 							nodes.push_back(portalNode);
+
+							if (teleported)
+								std::cout << portalNode.layer << ":" << (int)portalNode.room << " ";
 
 							if (nodes.size() == nodeLimit)
 								break;
 						}
 					}
 				}
+
+				if (teleported)
+					std::cout << std::endl;
 
 				for (uint8_t index = 0; index < nodes.size(); index++) {
 					auto& node = nodes.at(index);
